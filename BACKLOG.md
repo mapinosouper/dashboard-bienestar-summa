@@ -28,7 +28,7 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 
 ### Trasnoches
 - [x] Por default **no mostrar proyectos OK**; toggle para activarlos.
-- [ ] Vista resumen: **% de personas** del proyecto en trasnoche / en tardío, **n° de trasnoches**, y **gráfico** del n° total de trasnoches del equipo agrupado **por semana**.
+- [x] Vista resumen: **% de personas** del proyecto en trasnoche / en tardío, **n° de trasnoches**, y **gráfico** del n° total de trasnoches del equipo agrupado **por semana**.
 
 ### Vacaciones
 - [ ] Columna **futuras editable y persistida** (Supabase, admin).
