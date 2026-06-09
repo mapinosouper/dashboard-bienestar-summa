@@ -171,6 +171,8 @@ a{color:inherit}
 .dtable tr:last-child td{border-bottom:none}
 .dtable tbody tr:hover td{background:rgba(0,190,214,.045)}
 .dtable .avg-row td{font-weight:700;background:rgba(3,24,67,.035)}
+.dtable.sticky-first th:first-child,.dtable.sticky-first td:first-child{position:sticky;left:0;background:var(--card);z-index:1;box-shadow:1px 0 0 var(--border)}
+.dtable.sticky-first thead th:first-child{z-index:2}
 .scell{display:inline-block;min-width:32px;padding:2px 7px;border-radius:6px;font-weight:700;color:#fff}
 .namecell{font-weight:600;color:var(--primary)}
 .yes{color:var(--ok);font-weight:700}.no{color:var(--critico);font-weight:700}.warnflag{color:var(--vigilar-d);font-weight:700}
@@ -504,10 +506,11 @@ function renderProyecto(){
   body.innerHTML=h;
 }
 function ddPulse(code){
-  var months=pcMonths();if(!months.length)return '<div class="empty">Sin datos.</div>';
-  var cur=months[months.length-1],prev=months.length>=2?months[months.length-2]:null;
-  var rc=pcRows(code,cur);if(!rc.length)return '<div class="card"><div class="muted">Sin respuestas de Pulse para este proyecto en '+esc(cur)+'.</div></div>';
-  var rp=prev?pcRows(code,prev):[];
+  var months=pcMonths().filter(function(m){return pcRows(code,m).length>0;}); // solo meses con datos del proyecto
+  if(!months.length)return '<div class="card"><div class="muted">Sin respuestas de Pulse para este proyecto.</div></div>';
+  months.reverse(); // más reciente → más antiguo
+  var cur=months[0],prev=months[1]||null;
+  var rc=pcRows(code,cur),rp=prev?pcRows(code,prev):[];
   var head='<th>Dimensión</th>'+months.map(function(m){return '<th class="num">'+esc(m)+'</th>';}).join('')+(prev?'<th class="num">Var</th>':'')+'<th class="num">Notas &lt;'+TH+'</th>';
   var rows='';
   for(var qi=0;qi<7;qi++){var col=pcCol(PC_IDX.q0+qi);
@@ -520,7 +523,7 @@ function ddPulse(code){
   var resp='<div class="card-sub" style="margin-top:14px">Respuestas individuales · '+esc(cur)+' (Pulse es anónimo; se identifica por cargo)</div><div class="dtable-wrap"><table class="dtable"><thead><tr><th>Cargo</th>'+PC_Q_SHORT.map(function(q){return '<th class="num" title="'+esc(q)+'">'+esc(q.split(' ')[0])+'</th>';}).join('')+'</tr></thead><tbody>';
   rc.forEach(function(r){resp+='<tr><td class="cargo">'+esc(String(r[pcCol(PC_IDX.cargo)]||''))+'</td>';for(var qi=0;qi<7;qi++){var v=parseN(r[pcCol(PC_IDX.q0+qi)]);resp+='<td class="num" style="color:'+scoreColor(v)+';font-weight:'+(v!=null&&v<TH?'700':'500')+'">'+(v!=null?v:'—')+'</td>';}resp+='</tr>';});
   resp+='</tbody></table></div>';
-  return '<div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+resp+'</div>';
+  return '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+resp+'</div>';
 }
 function ddPitstop(code){
   var groups=psGrouped(code);if(!groups.length)return '<div class="empty">Este proyecto no tiene Pit Stops registrados.</div>';
