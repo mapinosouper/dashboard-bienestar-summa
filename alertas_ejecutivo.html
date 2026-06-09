@@ -276,7 +276,7 @@ a{color:inherit}
   <!-- PANEL PULSE -->
   <div class="view" id="v-pulse">
     <div class="h1">📊 Pulse Check · por proyecto</div>
-    <div class="sub">Promedio por dimensión (1–10) de cada proyecto. Rojo &lt;4 · ámbar 4–6 · verde ≥7.</div>
+    <div class="sub">Promedio por dimensión (1–10) de cada proyecto. Rojo ≤4 · ámbar 5–7 · verde ≥8.</div>
     <div class="selectbar"><span class="sel-lbl">Mes</span><select class="sel" id="pl-mes" onchange="renderPulse()"></select><span class="sel-lbl">vs</span><select class="sel" id="pl-mes2" onchange="renderPulse()"></select></div>
     <div id="pl-body"></div>
   </div>
@@ -284,7 +284,7 @@ a{color:inherit}
   <!-- PANEL PIT STOP -->
   <div class="view" id="v-pitstop">
     <div class="h1">📋 Pit Stop · por proyecto</div>
-    <div class="sub">Último Pit Stop de cada proyecto: dimensiones (1–10), señales de gestión y temas por discutir.</div>
+    <div class="sub">Último Pit Stop de cada proyecto: dimensiones (1–5), señales de gestión y temas por discutir.</div>
     <div class="selectbar"><label class="switch"><input type="checkbox" id="ps-compare" onchange="renderPitstop()"><span class="track"></span> Comparar con el Pit Stop anterior</label></div>
     <div id="ps-body"></div>
   </div>
@@ -342,7 +342,7 @@ function parseTRDate(v){if(!v)return null;var s=String(v).trim();
   var d=new Date(s);return isNaN(d)?null:d;}
 function parseTimeHour(s){if(!s)return null;var m=String(s).trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/);if(!m)return null;var h=parseInt(m[1]);if(m[3]==='PM'&&h!==12)h+=12;if(m[3]==='AM'&&h===12)h=0;return h;}
 function weekKey(d){var jan1=new Date(d.getFullYear(),0,1);var wk=Math.ceil((((d-jan1)/864e5)+jan1.getDay()+1)/7);return d.getFullYear()+'-W'+(wk<10?'0':'')+wk;}
-function shortQ(s){return String(s||'').replace(/\s*\(1-10\)\s*$/,'').replace(/^¿/,'').replace(/\?$/,'').trim();}
+function shortQ(s){return String(s||'').replace(/\s*\(1\s*[-–]\s*\d+\)\s*$/,'').replace(/^¿/,'').replace(/\?$/,'').trim();}
 // Concepto corto para las preguntas numéricas del Pit Stop (encabezados P1..Pn). Por palabra clave → robusto a distintos formularios.
 function psConcept(q){var s=String(q||'').toLowerCase();
   var map=[['te has sentido','Ánimo'],['alinea','Alineación'],['involucr','Involucramiento'],['ruta cr','Ruta crítica'],
@@ -351,8 +351,8 @@ function psConcept(q){var s=String(q||'').toLowerCase();
   var stop={como:1,'cómo':1,que:1,'qué':1,'cuán':1,'cuánto':1,'cuál':1,estamos:1,tan:1,bien:1,tienes:1,tenemos:1,te:1,has:1,es:1,la:1,el:1,un:1,una:1,con:1,los:1,las:1,del:1};
   var w=s.replace(/[¿?(),]/g,' ').split(/\s+/).filter(Boolean).find(function(x){return x.length>3&&!stop[x];});
   return w?w.charAt(0).toUpperCase()+w.slice(1):'';}
-function scoreColor(v){return v==null?'var(--ceguera)':v<4?'var(--critico)':v<6?'var(--vigilar-d)':'var(--ok)';}
-function scell(v){return v==null?'<span class="muted">—</span>':'<span class="scell" style="background:'+scoreColor(v)+'">'+fmt(v)+'</span>';}
+function scoreColor(v,scale){if(v==null)return 'var(--ceguera)';if(scale==='pitstop')return v<3?'var(--critico)':v<4?'var(--vigilar-d)':'var(--ok)';return v<=4?'var(--critico)':v<8?'var(--vigilar-d)':'var(--ok)';} // pitstop 1–5 · pulse 1–10
+function scell(v,scale){return v==null?'<span class="muted">—</span>':'<span class="scell" style="background:'+scoreColor(v,scale)+'">'+fmt(v)+'</span>';}
 function varCell(a,b){if(a==null||b==null)return '<span class="muted">—</span>';var d=Math.round((a-b)*10)/10;if(d>0)return '<span class="var-up">↑ +'+fmt(d)+'</span>';if(d<0)return '<span class="var-down">↓ '+fmt(Math.abs(d))+'</span>';return '<span class="var-eq">=</span>';}
 function posKey(rows,i){return Object.keys((rows&&rows[0])||{})[i];}
 // resuelve una columna por nombre (exacto, trim, contiene) — robustez con archivos reales
@@ -413,7 +413,7 @@ function detectPitstop(code,out){
   var recent=dated.filter(function(x){return(REF-x.ts)>=0&&(REF-x.ts)<=14*864e5;});
   if(!recent.length){var last=dated.length?Math.max.apply(null,dated.map(function(x){return x.ts;})):null;var days=last?Math.round((REF-last)/864e5):null;out.push({src:'pitstop',sev:'ceguera',title:last?'Sin Pit Stop hace '+days+' días':'Nunca registró Pit Stop',detail:last?'Último registro: '+shortDate(new Date(last)):'Sin registros',people:[],temporal:null});return;}
   var maxTs=Math.max.apply(null,recent.map(function(x){return x.ts;}));var last=recent.filter(function(x){return x.ts===maxTs;}).map(function(x){return x.r;});
-  PS.nums.forEach(function(ci){var col=psCol(ci);var a=numAvg(last,col);if(a!=null&&a<4)out.push({src:'pitstop',sev:'critico',title:'"'+shortQ(col)+'" en '+fmt(a)+'/10',detail:'Promedio del último Pit Stop bajo 4  ·  '+shortDate(new Date(maxTs)),people:[],temporal:null});});
+  PS.nums.forEach(function(ci){var col=psCol(ci);var a=numAvg(last,col);if(a!=null&&a<3.5)out.push({src:'pitstop',sev:'critico',title:'"'+shortQ(col)+'" en '+fmt(a)+'/5',detail:'Promedio del último Pit Stop bajo 3,5  ·  '+shortDate(new Date(maxTs)),people:[],temporal:null});});
   PS.alerts_si_good.forEach(function(ci){var col=psCol(ci);var no=last.filter(function(r){return isSi(r[col])===false;}).map(function(r){return String(r[psCol(PS.nombre)]||'').trim();}).filter(Boolean);if(no.length)out.push({src:'pitstop',sev:'critico',title:no.length+' "No" en "'+shortQ(col)+'"',detail:'Último Pit Stop  ·  '+shortDate(new Date(maxTs)),people:no,temporal:null});});
 }
 function detectTraslados(code,out){
@@ -531,20 +531,20 @@ function ddPulse(code){
   var rows='';
   for(var qi=0;qi<7;qi++){var col=pcCol(PC_IDX.q0+qi);
     rows+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>';
-    months.forEach(function(m){rows+='<td class="num">'+scell(numAvg(pcRows(code,m),col))+'</td>';});
+    months.forEach(function(m){rows+='<td class="num">'+scell(numAvg(pcRows(code,m),col),'pulse')+'</td>';});
     if(prev)rows+='<td class="num">'+varCell(numAvg(rc,col),numAvg(rp,col))+'</td>';
     var nb=rc.filter(function(r){var v=parseN(r[col]);return v!=null&&v<TH;}).length;
     rows+='<td class="num">'+(nb>0?'<b style="color:var(--critico)">'+nb+'</b>':'0')+'</td></tr>';
   }
   var resp='<div class="card-sub" style="margin-top:14px">Respuestas individuales · '+esc(cur)+' (Pulse es anónimo; se identifica por cargo)</div><div class="dtable-wrap"><table class="dtable"><thead><tr><th>Cargo</th>'+PC_Q_SHORT.map(function(q){return '<th class="num" title="'+esc(q)+'">'+esc(q.split(' ')[0])+'</th>';}).join('')+'</tr></thead><tbody>';
-  rc.forEach(function(r){resp+='<tr><td class="cargo">'+esc(String(r[pcCol(PC_IDX.cargo)]||''))+'</td>';for(var qi=0;qi<7;qi++){var v=parseN(r[pcCol(PC_IDX.q0+qi)]);resp+='<td class="num" style="color:'+scoreColor(v)+';font-weight:'+(v!=null&&v<TH?'700':'500')+'">'+(v!=null?v:'—')+'</td>';}resp+='</tr>';});
+  rc.forEach(function(r){resp+='<tr><td class="cargo">'+esc(String(r[pcCol(PC_IDX.cargo)]||''))+'</td>';for(var qi=0;qi<7;qi++){var v=parseN(r[pcCol(PC_IDX.q0+qi)]);resp+='<td class="num" style="color:'+scoreColor(v,'pulse')+';font-weight:'+(v!=null&&v<TH?'700':'500')+'">'+(v!=null?v:'—')+'</td>';}resp+='</tr>';});
   resp+='</tbody></table></div>';
   return '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+resp+'</div>';
 }
 function ddPitstop(code){
   var groups=psGrouped(code);if(!groups.length)return '<div class="empty">Este proyecto no tiene Pit Stops registrados.</div>';
   function whoOf(r,i){return String(r[psCol(PS.nombre)]||'').trim()||('Resp. '+(i+1));}
-  function numCell(v){var n=parseN(v);return '<td class="num" style="color:'+scoreColor(n)+';font-weight:700">'+(n!=null?n:'—')+'</td>';}
+  function numCell(v){var n=parseN(v);return '<td class="num" style="color:'+scoreColor(n,'pitstop')+';font-weight:700">'+(n!=null?n:'—')+'</td>';}
   function siCell(v,mode){var s=isSi(v);if(s===null)return '<td class="num muted">—</td>';if(mode==='good')return '<td class="num">'+(s?'<span class="yes">Sí</span>':'<span class="no">No</span>')+'</td>';return '<td class="num">'+(s?'<span class="warnflag">Sí</span>':'<span class="muted">No</span>')+'</td>';}
   var h='';
   groups.slice().reverse().forEach(function(g,idx){
@@ -553,7 +553,7 @@ function ddPitstop(code){
     var head='<th class="qcol">Pregunta</th>'+resp.map(function(r,i){return '<th class="num">'+esc(whoOf(r,i))+'</th>';}).join('');
     function grp(t){return '<tr class="grp"><td colspan="'+ncols+'">'+t+'</td></tr>';}
     function qrow(ci,mode){return '<tr><td class="qcol">'+esc(shortQ(psCol(ci)))+'</td>'+resp.map(function(r){return mode==='num'?numCell(r[psCol(ci)]):siCell(r[psCol(ci)],mode);}).join('')+'</tr>';}
-    var rows=grp('Termómetro · escala 1–10');
+    var rows=grp('Termómetro · escala 1–5');
     PS.nums.forEach(function(ci){rows+=qrow(ci,'num');});
     rows+=grp('Señales de gestión · Sí = bueno');
     PS.alerts_si_good.forEach(function(ci){rows+=qrow(ci,'good');});
@@ -592,7 +592,7 @@ function renderPulse(){
   var rowsData=codes.map(function(code){var rc=pcRows(code,mes);var avgs=[];for(var qi=0;qi<7;qi++)avgs.push(numAvg(rc,pcCol(PC_IDX.q0+qi)));var prom=avgArr(avgs);var prom2=null;if(mes2){var rp=pcRows(code,mes2);var a2=[];for(var qi=0;qi<7;qi++)a2.push(numAvg(rp,pcCol(PC_IDX.q0+qi)));prom2=avgArr(a2);}return{code:code,label:REG[code].label,avgs:avgs,n:rc.length,prom:prom,prom2:prom2};}).filter(function(x){return x.n>0;});
   rowsData.sort(function(a,b){return(a.prom==null?99:a.prom)-(b.prom==null?99:b.prom);});
   var head='<th>Proyecto</th>'+PC_Q_SHORT.map(function(q){return '<th class="num" title="'+esc(q)+'">'+esc(q.split(' ')[0])+'</th>';}).join('')+'<th class="num">Prom.</th>'+(mes2?'<th class="num">Var</th>':'')+'<th class="num">N</th>';
-  var rows=rowsData.map(function(d){return '<tr><td class="namecell">'+esc(d.label)+'</td>'+d.avgs.map(function(v){return '<td class="num">'+scell(v)+'</td>';}).join('')+'<td class="num">'+scell(d.prom)+'</td>'+(mes2?'<td class="num">'+varCell(d.prom,d.prom2)+'</td>':'')+'<td class="num muted">'+d.n+'</td></tr>';}).join('');
+  var rows=rowsData.map(function(d){return '<tr><td class="namecell">'+esc(d.label)+'</td>'+d.avgs.map(function(v){return '<td class="num">'+scell(v,'pulse')+'</td>';}).join('')+'<td class="num">'+scell(d.prom,'pulse')+'</td>'+(mes2?'<td class="num">'+varCell(d.prom,d.prom2)+'</td>':'')+'<td class="num muted">'+d.n+'</td></tr>';}).join('');
   body.innerHTML='<div class="tline">Mes: <b>'+esc(mes)+'</b>'+(mes2?' · comparado con '+esc(mes2):'')+' · proyectos ordenados de menor a mayor promedio.</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 function avgArr(a){var f=a.filter(function(v){return v!=null;});return f.length?Math.round(f.reduce(function(x,y){return x+y;},0)/f.length*10)/10:null;}
@@ -613,7 +613,7 @@ function renderPitstop(){
   var head='<th>Proyecto</th><th>Último Pit Stop</th>'+numH+'<th class="num">Prom.</th>'+(cmp?'<th class="num">Var vs ant.</th>':'')+'<th class="num">Señales "No"</th><th class="num">Por discutir</th><th class="num">N</th>';
   var span=cmp?9:8;
   var rows=data.map(function(d){if(d.none)return '<tr><td class="namecell">'+esc(d.label)+' <span class="badge b-night">sin Pit Stop</span></td><td colspan="'+span+'" class="muted">Sin Pit Stop registrado</td></tr>';
-    return '<tr><td class="namecell">'+esc(d.label)+(d.recent?'':' <span class="badge b-late">+14 días</span>')+'</td><td>'+esc(d.fecha)+'</td>'+d.avgs.map(function(v){return '<td class="num">'+scell(v)+'</td>';}).join('')+'<td class="num">'+scell(d.prom)+'</td>'+(cmp?'<td class="num">'+(d.promPrev!=null?varCell(d.prom,d.promPrev):'<span class="muted">—</span>')+'</td>':'')+'<td class="num">'+(d.no>0?'<b class="no">'+d.no+'</b>':'0')+'</td><td class="num">'+(d.bad>0?'<b class="warnflag">'+d.bad+'</b>':'0')+'</td><td class="num muted">'+d.n+'</td></tr>';}).join('');
+    return '<tr><td class="namecell">'+esc(d.label)+(d.recent?'':' <span class="badge b-late">+14 días</span>')+'</td><td>'+esc(d.fecha)+'</td>'+d.avgs.map(function(v){return '<td class="num">'+scell(v,'pitstop')+'</td>';}).join('')+'<td class="num">'+scell(d.prom,'pitstop')+'</td>'+(cmp?'<td class="num">'+(d.promPrev!=null?varCell(d.prom,d.promPrev):'<span class="muted">—</span>')+'</td>':'')+'<td class="num">'+(d.no>0?'<b class="no">'+d.no+'</b>':'0')+'</td><td class="num">'+(d.bad>0?'<b class="warnflag">'+d.bad+'</b>':'0')+'</td><td class="num muted">'+d.n+'</td></tr>';}).join('');
   var leyenda=PS.nums.map(function(ci,i){return '<b>P'+(i+1)+'</b> '+esc(psConcept(shortQ(psCol(ci)))||shortQ(psCol(ci)));}).join(' · ');
   body.innerHTML='<div class="tline">Pit Stop más reciente por proyecto, de menor a mayor promedio'+(cmp?' · <b>Var vs ant.</b> compara contra el Pit Stop anterior':'')+'. Pasa el cursor por P1–P4 para ver la pregunta completa.<br>'+leyenda+'</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }

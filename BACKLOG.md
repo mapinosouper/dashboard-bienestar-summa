@@ -21,7 +21,7 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 - [ ] La "Variación" = diferencia entre los **últimos 2 registros**.
 
 ### Pit Stop
-- [ ] Corregir escala a **1–5** (no 1–10).
+- [x] Corregir escala a **1–5** (no 1–10).
 - [ ] Vista comparativa: seleccionar **hasta los 3 últimos Pit Stop**, mostrando el **promedio de cada respuesta** para ver el movimiento entre ciclos (solo numéricas).
 - [ ] La tabla de detalle (numéricas + binarias) solo para el **último Pit Stop**.
 - [ ] Lista de comentarios **colapsable**.
@@ -37,7 +37,7 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 ---
 
 ## Panel Pulse Check
-- [ ] Colores: **≤4 rojo · 5–7 ámbar · ≥8 verde**.
+- [x] Colores: **≤4 rojo · 5–7 ámbar · ≥8 verde**.
 - [ ] **Dar vuelta los ejes** (proyecto ↔ dimensión).
 - [ ] Tabla de **promedio general Summa con apertura por cargo** (general, Analista, Asociado/a).
 
