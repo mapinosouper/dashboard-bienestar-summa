@@ -342,6 +342,14 @@ function parseTRDate(v){if(!v)return null;var s=String(v).trim();
 function parseTimeHour(s){if(!s)return null;var m=String(s).trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/);if(!m)return null;var h=parseInt(m[1]);if(m[3]==='PM'&&h!==12)h+=12;if(m[3]==='AM'&&h===12)h=0;return h;}
 function weekKey(d){var jan1=new Date(d.getFullYear(),0,1);var wk=Math.ceil((((d-jan1)/864e5)+jan1.getDay()+1)/7);return d.getFullYear()+'-W'+(wk<10?'0':'')+wk;}
 function shortQ(s){return String(s||'').replace(/\s*\(1-10\)\s*$/,'').replace(/^¿/,'').replace(/\?$/,'').trim();}
+// Concepto corto para las preguntas numéricas del Pit Stop (encabezados P1..Pn). Por palabra clave → robusto a distintos formularios.
+function psConcept(q){var s=String(q||'').toLowerCase();
+  var map=[['te has sentido','Ánimo'],['alinea','Alineación'],['involucr','Involucramiento'],['ruta cr','Ruta crítica'],
+    ['carga de trabajo','Carga'],['claridad de obj','Objetivos'],['relación con el equipo','Equipo'],['aprendizaje','Aprendizaje']];
+  for(var i=0;i<map.length;i++)if(s.indexOf(map[i][0])>=0)return map[i][1];
+  var stop={como:1,'cómo':1,que:1,'qué':1,'cuán':1,'cuánto':1,'cuál':1,estamos:1,tan:1,bien:1,tienes:1,tenemos:1,te:1,has:1,es:1,la:1,el:1,un:1,una:1,con:1,los:1,las:1,del:1};
+  var w=s.replace(/[¿?(),]/g,' ').split(/\s+/).filter(Boolean).find(function(x){return x.length>3&&!stop[x];});
+  return w?w.charAt(0).toUpperCase()+w.slice(1):'';}
 function scoreColor(v){return v==null?'var(--ceguera)':v<4?'var(--critico)':v<6?'var(--vigilar-d)':'var(--ok)';}
 function scell(v){return v==null?'<span class="muted">—</span>':'<span class="scell" style="background:'+scoreColor(v)+'">'+fmt(v)+'</span>';}
 function varCell(a,b){if(a==null||b==null)return '<span class="muted">—</span>';var d=Math.round((a-b)*10)/10;if(d>0)return '<span class="var-up">↑ +'+fmt(d)+'</span>';if(d<0)return '<span class="var-down">↓ '+fmt(Math.abs(d))+'</span>';return '<span class="var-eq">=</span>';}
@@ -595,12 +603,13 @@ function renderPitstop(){
     var recent=(REF-last.ts)>=0&&(REF-last.ts)<=14*864e5;
     return{code:code,label:REG[code].label,fecha:last.fecha,prevFecha:prev?prev.fecha:null,avgs:avgs,prom:prom,promPrev:promPrev,no:no,bad:bad,n:last.rows.length,recent:recent};}).filter(Boolean);
   data.sort(function(a,b){if(a.none)return 1;if(b.none)return -1;return(a.prom==null?99:a.prom)-(b.prom==null?99:b.prom);});
-  var numH=PS.nums.map(function(ci){return '<th class="num" title="'+esc(shortQ(psCol(ci)))+'">'+esc(shortQ(psCol(ci)).split(' ')[0])+'</th>';}).join('');
+  var numH=PS.nums.map(function(ci,i){var q=shortQ(psCol(ci));var c=psConcept(q);return '<th class="num" title="'+esc(q)+'">P'+(i+1)+(c?' · '+esc(c):'')+'</th>';}).join('');
   var head='<th>Proyecto</th><th>Último Pit Stop</th>'+numH+'<th class="num">Prom.</th>'+(cmp?'<th class="num">Var vs ant.</th>':'')+'<th class="num">Señales "No"</th><th class="num">Por discutir</th><th class="num">N</th>';
   var span=cmp?9:8;
   var rows=data.map(function(d){if(d.none)return '<tr><td class="namecell">'+esc(d.label)+'</td><td colspan="'+span+'" class="muted">Sin Pit Stop registrado</td></tr>';
     return '<tr><td class="namecell">'+esc(d.label)+'</td><td>'+esc(d.fecha)+(d.recent?'':' <span class="badge b-late">+14d</span>')+'</td>'+d.avgs.map(function(v){return '<td class="num">'+scell(v)+'</td>';}).join('')+'<td class="num">'+scell(d.prom)+'</td>'+(cmp?'<td class="num">'+(d.promPrev!=null?varCell(d.prom,d.promPrev):'<span class="muted">—</span>')+'</td>':'')+'<td class="num">'+(d.no>0?'<b class="no">'+d.no+'</b>':'0')+'</td><td class="num">'+(d.bad>0?'<b class="warnflag">'+d.bad+'</b>':'0')+'</td><td class="num muted">'+d.n+'</td></tr>';}).join('');
-  body.innerHTML='<div class="tline">Pit Stop más reciente por proyecto, de menor a mayor promedio'+(cmp?' · <b>Var vs ant.</b> compara el promedio contra el Pit Stop anterior de cada proyecto':'')+'. Abre el deep-dive para ver respuesta por respuesta.</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  var leyenda=PS.nums.map(function(ci,i){return '<b>P'+(i+1)+'</b> '+esc(psConcept(shortQ(psCol(ci)))||shortQ(psCol(ci)));}).join(' · ');
+  body.innerHTML='<div class="tline">Pit Stop más reciente por proyecto, de menor a mayor promedio'+(cmp?' · <b>Var vs ant.</b> compara contra el Pit Stop anterior':'')+'. Pasa el cursor por P1–P4 para ver la pregunta completa.<br>'+leyenda+'</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 
 // ════════ RENDER · PANEL TRASLADOS ════════
