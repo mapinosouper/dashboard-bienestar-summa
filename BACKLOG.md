@@ -31,7 +31,7 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 - [x] Vista resumen: **% de personas** del proyecto en trasnoche / en tardío, **n° de trasnoches**, y **gráfico** del n° total de trasnoches del equipo agrupado **por semana**.
 
 ### Vacaciones
-- [ ] Columna **futuras editable y persistida** (Supabase, admin).
+- [x] Columna **futuras editable y persistida** (Supabase, admin).
 - [x] **Eliminar columna "Estado"**.
 
 ---

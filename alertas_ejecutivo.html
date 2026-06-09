@@ -199,6 +199,8 @@ a{color:inherit}
 .bbar.late{background:var(--vigilar)} .bbar.night{background:var(--critico)}
 .bval{font-size:10px;font-weight:700;color:var(--critico);min-height:13px}
 .blabel{font-size:9.5px;color:var(--muted)}
+.vac-inp{width:64px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;outline:none}
+.vac-inp:focus{border-color:var(--cyan)}
 .dd-layout{display:flex;gap:22px;align-items:flex-start}
 .dd-outline{width:172px;flex-shrink:0;position:sticky;top:116px}
 .dd-out-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:0 10px 6px}
@@ -347,6 +349,12 @@ var SUPABASE_URL='https://dmphptxhnfnhvwcyfluy.supabase.co';      // p.ej. https
 var SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtcGhwdHhobmZuaHZ3Y3lmbHV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMTI3MDAsImV4cCI6MjA5NjU4ODcwMH0.sKGhIzR2Jj3eB0lvxECj4dTagmlhgxJstJO558FhhWQ';    // anon public key (NO el service_role)
 var SUPABASE_READY=/^https?:\/\//.test(SUPABASE_URL)&&SUPABASE_ANON_KEY.length>20;
 var SB=null,ROLE=null,CURRENT_EMAIL=null,AUTHED=false;
+var VAC_OV={}; // overrides de "futuras pedidas" por persona (Supabase)
+function vacEditable(){return SUPABASE_READY&&ROLE==='admin';}
+function vacFut(r,name){var k=canonName(name);return VAC_OV[k]!=null?VAC_OV[k]:vacFuturas(r);}
+function vacFutCell(key,fut){if(vacEditable())return '<input type="number" step="0.5" min="0" class="vac-inp" data-persona="'+esc(key)+'" value="'+(fut!=null?fut:'')+'" onchange="saveVacFut(this)">';return fut>0?fmt(fut)+'d':'<span class="muted">sin pedir</span>';}
+function loadVacOverrides(cb){if(!SB){VAC_OV={};return cb&&cb();}SB.from('vac_overrides').select('persona,futuras').then(function(r){VAC_OV={};if(!r.error&&r.data)r.data.forEach(function(x){VAC_OV[x.persona]=x.futuras;});cb&&cb();});}
+function saveVacFut(inp){var persona=inp.getAttribute('data-persona');var val=inp.value===''?null:parseFloat(inp.value);if(val!=null&&isNaN(val))return;VAC_OV[persona]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('vac_overrides').upsert({persona:persona,futuras:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'persona'}).then(function(r){inp.style.outline='2px solid '+(r.error?'var(--critico)':'var(--ok)');setTimeout(function(){inp.style.outline='';},1200);});}}
 
 // ════════ UTILS ════════
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -617,10 +625,9 @@ function ddVac(code){
   var team=REG[code].people;if(!team.length)return '<div class="empty">Sin equipo.</div>';
   var v=DATA._vac;
   var rows=team.map(function(t){var r=vacRowByName(t.name);if(!r)return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td colspan="4" class="muted">sin registro</td></tr>';
-    var sl=parseN(r[v.salL])||0,sa=parseN(r[v.salA])||0,saldo=vacSaldo(r),fut=vacFuturas(r);
-    var estado=saldo>15?'<span class="badge b-night">Saldo alto</span>':saldo>7?'<span class="badge b-late">Medio</span>':'<span class="badge b-ok">OK</span>';
-    return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td class="num">'+fmt(sl)+'</td><td class="num">'+fmt(sa)+'</td><td class="num"><b>'+fmt(saldo)+'d</b></td><td class="num">'+(fut>0?fmt(fut)+'d':'<span class="muted">sin pedir</span>')+'</td><td>'+estado+'</td></tr>';}).join('');
-  return '<div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr><th>Persona</th><th>Cargo</th><th class="num">Saldo legal</th><th class="num">Saldo admin</th><th class="num">Saldo total</th><th class="num">Futuras</th><th>Estado</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    var sl=parseN(r[v.salL])||0,sa=parseN(r[v.salA])||0,saldo=vacSaldo(r),fut=vacFut(r,t.name);
+    return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td class="num">'+fmt(sl)+'</td><td class="num">'+fmt(sa)+'</td><td class="num"><b>'+fmt(saldo)+'d</b></td><td class="num">'+vacFutCell(canonName(t.name),fut)+'</td></tr>';}).join('');
+  return '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th><th>Cargo</th><th class="num">Saldo legal</th><th class="num">Saldo admin</th><th class="num">Saldo total</th><th class="num">Futuras</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(vacEditable()?'<div class="card-sub" style="margin-top:6px">Las "Futuras" son editables y se guardan para todo el equipo.</div>':'')+'</div>';
 }
 
 // ════════ RENDER · PANEL PULSE ════════
@@ -718,12 +725,12 @@ function renderTraslados(){
 // ════════ RENDER · PANEL VACACIONES ════════
 function renderVacaciones(){
   var body=document.getElementById('vac-body');var v=DATA._vac;
-  var data=DATA.vac.map(function(r){var name=String(r[v.nombre]||'').trim();var saldo=vacSaldo(r),fut=vacFuturas(r);var codes=personCodes(name);var proj=codes.length?codes.map(function(c){return REG[c]?REG[c].label:c;}).join(', '):'—';return{name:canonName(name),cargo:String(r[v.cargo]||''),saldo:saldo,fut:fut,proj:proj};}).filter(function(x){return x.name;});
+  var data=DATA.vac.map(function(r){var name=String(r[v.nombre]||'').trim();var saldo=vacSaldo(r),fut=vacFut(r,name);var codes=personCodes(name);var proj=codes.length?codes.map(function(c){return REG[c]?REG[c].label:c;}).join(', '):'—';return{name:canonName(name),cargo:String(r[v.cargo]||''),saldo:saldo,fut:fut,proj:proj};}).filter(function(x){return x.name;});
   data.sort(function(a,b){return b.saldo-a.saldo;});
   var high=data.filter(function(x){return x.saldo>15;}).length;var prom=data.length?Math.round(data.reduce(function(s,x){return s+x.saldo;},0)/data.length*10)/10:0;
   var kpis='<div class="kpis"><div class="kpi alert"><div class="v">'+high+'</div><div class="l">Saldo &gt; 15 días</div></div><div class="kpi"><div class="v">'+data.length+'</div><div class="l">Personas</div></div><div class="kpi"><div class="v">'+prom+'d</div><div class="l">Saldo promedio</div></div></div>';
-  var rows=data.map(function(d){return '<tr><td class="namecell">'+esc(d.name)+'</td><td class="cargo">'+esc(d.cargo)+'</td><td>'+esc(d.proj)+'</td><td class="num"><b>'+fmt(d.saldo)+'d</b></td><td class="num">'+(d.fut>0?fmt(d.fut)+'d':'<span class="muted">sin pedir</span>')+'</td></tr>';}).join('');
-  body.innerHTML=kpis+'<div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr><th>Persona</th><th>Cargo</th><th>Proyecto(s)</th><th class="num">Saldo total</th><th class="num">Futuras pedidas</th></tr></thead><tbody>'+rows+'</tbody></table></div></div><div class="tline">"Sin pedir" no es alerta por sí sola; solo se informa.</div>';
+  var rows=data.map(function(d){return '<tr><td class="namecell">'+esc(d.name)+'</td><td class="cargo">'+esc(d.cargo)+'</td><td>'+esc(d.proj)+'</td><td class="num"><b>'+fmt(d.saldo)+'d</b></td><td class="num">'+vacFutCell(d.name,d.fut)+'</td></tr>';}).join('');
+  body.innerHTML=kpis+'<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th><th>Cargo</th><th>Proyecto(s)</th><th class="num">Saldo total</th><th class="num">Futuras pedidas</th></tr></thead><tbody>'+rows+'</tbody></table></div></div><div class="tline">"Sin pedir" no es alerta por sí sola; solo se informa.'+(vacEditable()?' · Las futuras son editables y se guardan para todo el equipo.':'')+'</div>';
 }
 
 // ════════ CARGA DE DATOS (upload) ════════
@@ -791,12 +798,14 @@ function onAuthed(session){
 }
 function showDenied(msg){ showScreen('login'); setLoginMsg(msg,'err'); var bar=document.getElementById('userbar'); if(bar)bar.innerHTML='<button class="ub-btn" onclick="signOut()">Salir</button>'; }
 function loadRemoteData(){
+  loadVacOverrides(function(){
   SB.from('app_data').select('payload').eq('id',1).maybeSingle().then(function(r){
     if(r.error){ showDenied('Error al cargar datos: '+r.error.message); return; }
     var payload=r.data&&r.data.payload;
     if(payload&&payload.proj){ enterWith(payload); }
     else if(ROLE==='admin'){ decorateUserbar(); openUpload(); }
     else { showScreen('login'); setLoginMsg('Aún no hay datos publicados. Pídele al administrador que cargue los archivos.','ok'); var bar=document.getElementById('userbar'); if(bar)bar.innerHTML='<button class="ub-btn" onclick="signOut()">Salir</button>'; }
+  });
   });
 }
 function publishData(){
