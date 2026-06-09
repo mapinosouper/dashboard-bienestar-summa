@@ -3,7 +3,7 @@
 Recibido. Marcamos `[x]` a medida que se cierra.
 
 ## Decisiones / defaults asumidos (corregir si aplica)
-- **Pit Stop escala 1–5** (no 1–10): colores **≤2 rojo · 3 ámbar · ≥4 verde**; "señal de riesgo" (crítico) cuando el promedio de una numérica **< 3**.
+- **Pit Stop escala 1–5** (no 1–10): colores **≤2 rojo · 3 ámbar · ≥4 verde**; "señal de riesgo" (crítico) cuando el promedio de una numérica **< 3.5**.
 - **Pulse colores** (1–10, según indicaste): **≤4 rojo · 5–7 ámbar · ≥8 verde**. La lógica de alerta de Pulse (nota <4) se mantiene salvo que indiques lo contrario.
 - **Vacaciones futuras editable + guardado**: se guarda en **Supabase** (tabla nueva), editable **solo por admin**, por persona.
 - **Orden tabla Pulse (vista proyecto)**: ahora **antiguo → reciente** (revierte el cambio anterior reciente→antiguo).
