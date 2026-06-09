@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bienestar Summa · Triage ejecutivo</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="mock_data.js"></script>
 <style>
 :root{
@@ -52,6 +53,30 @@ a{color:inherit}
 .btn-ghost{background:none;border:1.5px solid var(--border);color:var(--primary);border-radius:10px;padding:12px 22px;font-size:13px;font-weight:600;cursor:pointer}
 .btn-ghost:hover{border-color:var(--cyan)}
 .up-msg{font-size:12px;color:var(--muted);margin-top:14px}
+
+/* ---- login ---- */
+#login{display:none;min-height:calc(100vh - 56px);align-items:center;justify-content:center;padding:40px 24px}
+.login-card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:34px 32px;max-width:400px;width:100%;text-align:center}
+.login-logo{font-size:15px;font-weight:800;color:var(--primary);margin-bottom:18px}
+.login-title{font-size:21px;font-weight:800;color:var(--primary)}
+.login-sub{font-size:12.5px;color:var(--muted);margin:8px 0 22px;line-height:1.5}
+.login-input{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;outline:none;margin-bottom:12px}
+.login-input:focus{border-color:var(--cyan)}
+.login-send{width:100%;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer}
+.login-send:hover{background:var(--prim-l)}
+.login-msg{font-size:12px;margin-top:12px;min-height:16px;line-height:1.4}
+.login-msg.ok{color:var(--ok);font-weight:600}.login-msg.err{color:var(--critico);font-weight:600}
+.login-demo{margin-top:18px;font-size:12px}
+.login-demo a{color:var(--muted);cursor:pointer;text-decoration:underline}
+.login-demo a:hover{color:var(--primary)}
+.login-config{margin-top:16px;font-size:11px;color:var(--vigilar-d);background:var(--vigilar-bg);border-radius:8px;padding:0;line-height:1.45}
+.login-config:not(:empty){padding:10px 12px}
+
+/* ---- userbar ---- */
+#userbar{margin-left:auto;display:flex;align-items:center;gap:10px}
+.ub-email{font-size:11.5px;color:rgba(255,255,255,.7)}
+.ub-btn{background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:7px;padding:6px 11px;font-size:11.5px;font-weight:600;cursor:pointer}
+.ub-btn:hover{background:rgba(255,255,255,.22)}
 
 .wrap{max-width:1000px;margin:0 auto;padding:28px 26px 90px}
 .view{display:none}
@@ -175,7 +200,21 @@ a{color:inherit}
 </style>
 </head>
 <body>
-<div class="topbar"><div class="brand">Bienestar Summa <span>· Panel de bienestar por proyecto</span></div></div>
+<div class="topbar"><div class="brand">Bienestar Summa <span>· Panel de bienestar por proyecto</span></div><div id="userbar"></div></div>
+
+<!-- ════ LOGIN (magic-link) ════ -->
+<div id="login">
+  <div class="login-card">
+    <div class="login-logo">🌿 Bienestar Summa</div>
+    <div class="login-title">Ingresa con tu correo</div>
+    <div class="login-sub">Te enviamos un enlace mágico para entrar. Solo correos autorizados.</div>
+    <input id="login-email" type="email" autocomplete="email" placeholder="tu.correo@summapartners.com" class="login-input" onkeydown="if(event.key==='Enter')sendMagicLink()">
+    <button id="login-btn" class="login-send" onclick="sendMagicLink()">Enviar enlace mágico →</button>
+    <div id="login-msg" class="login-msg"></div>
+    <div class="login-demo"><a onclick="useDemo()">Ver demo sin iniciar sesión →</a></div>
+    <div id="login-config" class="login-config"></div>
+  </div>
+</div>
 
 <!-- ════ PANTALLA DE CARGA ════ -->
 <div id="upload">
@@ -190,7 +229,7 @@ a{color:inherit}
       <div class="up-card" id="uc-proj"><div class="up-ico">🗂️</div><div class="up-name">Proyectos Activos</div><div class="up-freq">Código · Persona · Cargo</div><input type="file" id="ufi-proj" accept=".xls,.xlsx,.csv" style="display:none"><button class="up-btn" onclick="document.getElementById('ufi-proj').click()">📂 Cargar</button><div class="ust" id="ust-proj">Sin cargar</div></div>
     </div>
     <div class="up-actions">
-      <button class="btn-primary" id="up-enter" disabled onclick="enterReal()">Entrar al panel →</button>
+      <button class="btn-primary" id="up-enter" disabled onclick="enterFromUpload()">Entrar al panel →</button>
       <button class="btn-ghost" onclick="useDemo()">Usar datos de ejemplo</button>
     </div>
     <div class="up-msg" id="up-msg">0 de 5 fuentes cargadas.</div>
@@ -274,6 +313,12 @@ var SRC={pulse:{ico:'📊',name:'Pulse Check'},pitstop:{ico:'📋',name:'Pit Sto
 var SRC_ORDER=['pulse','pitstop','traslados','vacaciones'];
 var TH=5;
 var DATA=null,REF=0,PCH=[],PSH=[];
+
+// ════════ SUPABASE (pega aquí tus llaves del proyecto) ════════
+var SUPABASE_URL='__PEGA_TU_PROJECT_URL__';      // p.ej. https://xxxx.supabase.co
+var SUPABASE_ANON_KEY='__PEGA_TU_ANON_KEY__';    // anon public key (NO el service_role)
+var SUPABASE_READY=/^https?:\/\//.test(SUPABASE_URL)&&SUPABASE_ANON_KEY.length>20;
+var SB=null,ROLE=null,CURRENT_EMAIL=null,AUTHED=false;
 
 // ════════ UTILS ════════
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -605,19 +650,84 @@ function onUpFile(key){return function(){var f=this.files[0];if(!f)return;var st
     UP[key]=rows;document.getElementById('uc-'+key).classList.add('loaded');st.textContent='✓ '+rows.length+' filas';st.className='ust ok';checkReady();
   });};}
 function checkReady(){var n=['ps','pc','tr','vac','proj'].filter(function(k){return UP[k];}).length;var btn=document.getElementById('up-enter');if(!btn)return;btn.disabled=n<5;document.getElementById('up-msg').textContent=n>=5?'✓ Listo, las 5 fuentes cargadas.':n+' de 5 fuentes cargadas — '+(5-n)+' pendiente'+(5-n!==1?'s':'')+'.';}
+function showScreen(s){
+  document.getElementById('login').style.display=s==='login'?'flex':'none';
+  document.getElementById('upload').style.display=s==='upload'?'flex':'none';
+  document.getElementById('app').style.display=s==='app'?'block':'none';
+}
 function enterWith(d){
   setData(d);buildModel();fillProjectSelect();fillMonths();fillTrPeriods();
-  document.getElementById('upload').style.display='none';
-  document.getElementById('app').style.display='block';
-  go('resumen');
+  showScreen('app');go('resumen');decorateUserbar();
 }
 function enterReal(){enterWith({pc:UP.pc,ps:UP.ps,tr:UP.tr,vac:UP.vac,proj:UP.proj,projMeta:{},refDate:null});}
 function useDemo(){enterWith(MOCK);}
+function enterFromUpload(){ if(SUPABASE_READY&&ROLE==='admin') publishData(); else enterReal(); }
+function openUpload(){ showScreen('upload'); var b=document.getElementById('up-enter'); if(b){ b.disabled=!['ps','pc','tr','vac','proj'].every(function(k){return UP[k];}); b.textContent=(SUPABASE_READY&&ROLE==='admin')?'Publicar al equipo y entrar →':'Entrar al panel →'; } }
+function setUploadMsg(t){ var m=document.getElementById('up-msg'); if(m)m.textContent=t; }
+
+// ── barra de sesión ──
+function decorateUserbar(){
+  var bar=document.getElementById('userbar'); if(!bar)return;
+  if(!SUPABASE_READY||!CURRENT_EMAIL){ bar.innerHTML=''; return; }
+  bar.innerHTML=(ROLE==='admin'?'<button class="ub-btn" onclick="openUpload()">↻ Actualizar datos</button>':'')+
+    '<span class="ub-email">'+esc(CURRENT_EMAIL)+(ROLE==='admin'?' · admin':'')+'</span>'+
+    '<button class="ub-btn" onclick="signOut()">Salir</button>';
+}
+
+// ── auth (magic-link) ──
+function setLoginMsg(t,c){ var m=document.getElementById('login-msg'); if(m){ m.textContent=t; m.className='login-msg'+(c?' '+c:''); } }
+function renderLoginConfigNotice(){ var c=document.getElementById('login-config'); if(c) c.innerHTML='⚙️ Supabase aún no está configurado: el login se activa cuando pegues tus llaves. Por ahora usa <b>“Ver demo”</b>.'; }
+function initSupabase(){ try{ SB=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY); }catch(e){ SB=null; } }
+function sendMagicLink(){
+  if(!SUPABASE_READY){ setLoginMsg('Falta configurar Supabase: pega SUPABASE_URL y la anon key en el archivo.','err'); return; }
+  var email=(document.getElementById('login-email').value||'').trim().toLowerCase();
+  if(!email||email.indexOf('@')<1){ setLoginMsg('Ingresa un correo válido.','err'); return; }
+  setLoginMsg('Enviando enlace…','');
+  SB.auth.signInWithOtp({email:email,options:{emailRedirectTo:location.origin+location.pathname}}).then(function(res){
+    if(res.error) setLoginMsg('Error: '+res.error.message,'err');
+    else setLoginMsg('✓ Enlace enviado a '+email+'. Ábrelo en este navegador para entrar.','ok');
+  });
+}
+function signOut(){ if(SB) SB.auth.signOut().then(function(){ location.reload(); }); }
+function routeAuth(){
+  SB.auth.getSession().then(function(r){ var s=r.data&&r.data.session; if(s) onAuthed(s); else showScreen('login'); });
+  SB.auth.onAuthStateChange(function(ev,s){ if(s&&!AUTHED) onAuthed(s); });
+}
+function onAuthed(session){
+  if(AUTHED)return;
+  CURRENT_EMAIL=((session.user&&session.user.email)||'').toLowerCase();
+  SB.from('allowed_users').select('role').eq('email',CURRENT_EMAIL).maybeSingle().then(function(r){
+    if(r.error){ showDenied('No se pudo validar tu acceso: '+r.error.message); return; }
+    if(!r.data){ showDenied('Tu correo ('+CURRENT_EMAIL+') no está autorizado. Pídele acceso al administrador.'); return; }
+    ROLE=r.data.role||'viewer'; AUTHED=true; loadRemoteData();
+  });
+}
+function showDenied(msg){ showScreen('login'); setLoginMsg(msg,'err'); var bar=document.getElementById('userbar'); if(bar)bar.innerHTML='<button class="ub-btn" onclick="signOut()">Salir</button>'; }
+function loadRemoteData(){
+  SB.from('app_data').select('payload').eq('id',1).maybeSingle().then(function(r){
+    if(r.error){ showDenied('Error al cargar datos: '+r.error.message); return; }
+    var payload=r.data&&r.data.payload;
+    if(payload&&payload.proj){ enterWith(payload); }
+    else if(ROLE==='admin'){ decorateUserbar(); openUpload(); }
+    else { showScreen('login'); setLoginMsg('Aún no hay datos publicados. Pídele al administrador que cargue los archivos.','ok'); var bar=document.getElementById('userbar'); if(bar)bar.innerHTML='<button class="ub-btn" onclick="signOut()">Salir</button>'; }
+  });
+}
+function publishData(){
+  if(!SB){ enterReal(); return; }
+  var payload={pc:UP.pc,ps:UP.ps,tr:UP.tr,vac:UP.vac,proj:UP.proj,projMeta:{},refDate:null};
+  setUploadMsg('Publicando para el equipo…');
+  SB.from('app_data').update({payload:payload,updated_at:new Date().toISOString(),updated_by:CURRENT_EMAIL}).eq('id',1).then(function(r){
+    if(r.error){ setUploadMsg('Error al publicar: '+r.error.message); return; }
+    enterWith(payload);
+  });
+}
 
 // ════════ INIT ════════
 buildNav();
 ['ps','pc','tr','vac','proj'].forEach(function(k){document.getElementById('ufi-'+k).addEventListener('change',onUpFile(k));});
 checkReady();
+if(SUPABASE_READY){ initSupabase(); showScreen('login'); routeAuth(); }
+else { showScreen('login'); renderLoginConfigNotice(); }
 </script>
 </body>
 </html>
