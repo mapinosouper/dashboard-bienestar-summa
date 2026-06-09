@@ -199,6 +199,13 @@ a{color:inherit}
 .bbar.late{background:var(--vigilar)} .bbar.night{background:var(--critico)}
 .bval{font-size:10px;font-weight:700;color:var(--critico);min-height:13px}
 .blabel{font-size:9.5px;color:var(--muted)}
+.dd-layout{display:flex;gap:22px;align-items:flex-start}
+.dd-outline{width:172px;flex-shrink:0;position:sticky;top:116px}
+.dd-out-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:0 10px 6px}
+.dd-out-item{display:block;font-size:12.5px;color:var(--muted);padding:7px 10px;border-radius:8px;cursor:pointer}
+.dd-out-item:hover{background:var(--card);color:var(--primary)}
+[id^="ddsec-"]{scroll-margin-top:116px}
+@media(max-width:760px){.dd-layout{display:block}.dd-outline{display:none}}
 .kpi{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:15px 18px;border-top:4px solid var(--primary)}
 .kpi.alert{border-top-color:var(--critico)}.kpi.warn{border-top-color:var(--vigilar)}
 .kpi .v{font-size:27px;font-weight:800;color:var(--primary);line-height:1}
@@ -286,7 +293,7 @@ a{color:inherit}
     <div class="h1">Deep-dive por proyecto</div>
     <div class="sub">Detalle consolidado de todas las respuestas — no solo las alertas.</div>
     <div class="selectbar"><span class="sel-lbl">Proyecto</span><select class="sel" id="dd-sel" onchange="renderProyecto()"></select></div>
-    <div id="dd-body"></div>
+    <div class="dd-layout"><div id="dd-outline" class="dd-outline"></div><div id="dd-body" style="flex:1;min-width:0"></div></div>
   </div>
 
   <!-- PANEL PULSE -->
@@ -531,13 +538,15 @@ function renderProyecto(){
   var p=MODEL.byCode[code];var body=document.getElementById('dd-body');var h='';
   h+='<div class="card" style="border-left:5px solid '+SEV[p.tier].dot+'"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="pname" style="font-size:18px">'+esc(p.label)+'</span><span class="tier-tag s-'+p.tier+'">'+SEV[p.tier].label+'</span><span class="muted" style="font-size:12px">'+p.alerts.length+' alerta'+(p.alerts.length!==1?'s':'')+' · '+p.team.length+' personas</span></div>'+
     '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:7px">'+p.team.map(function(t){return '<span class="person">'+esc(t.name)+' <span class="cargo">· '+esc(t.cargo)+'</span></span>';}).join('')+'</div></div>';
-  h+='<div class="section-label">Alertas activas</div>';
-  h+=p.alerts.length?('<div class="card">'+alertDetailHTML(p.alerts)+'</div>'):'<div class="empty">✅ Sin alertas activas en este proyecto.</div>';
-  h+='<div class="section-label">📊 Pulse Check</div>'+ddPulse(code);
-  h+='<div class="section-label">📋 Pit Stop</div>'+ddPitstop(code);
-  h+='<div class="section-label">🚗 Traslados PM — todos los viajes</div>'+ddTraslados(code);
-  h+='<div class="section-label">🏖️ Vacaciones del equipo</div>'+ddVac(code);
+  h+='<div id="ddsec-alertas"><div class="section-label">Alertas activas</div>'+(p.alerts.length?('<div class="card">'+alertDetailHTML(p.alerts)+'</div>'):'<div class="empty">✅ Sin alertas activas en este proyecto.</div>')+'</div>';
+  h+='<div id="ddsec-pulse"><div class="section-label">📊 Pulse Check</div>'+ddPulse(code)+'</div>';
+  h+='<div id="ddsec-pitstop"><div class="section-label">📋 Pit Stop</div>'+ddPitstop(code)+'</div>';
+  h+='<div id="ddsec-traslados"><div class="section-label">🚗 Traslados PM</div>'+ddTraslados(code)+'</div>';
+  h+='<div id="ddsec-vac"><div class="section-label">🏖️ Vacaciones del equipo</div>'+ddVac(code)+'</div>';
   body.innerHTML=h;
+  var ol=document.getElementById('dd-outline');
+  if(ol){var secs=[['ddsec-alertas','⚠️ Alertas'],['ddsec-pulse','📊 Pulse Check'],['ddsec-pitstop','📋 Pit Stop'],['ddsec-traslados','🚗 Traslados'],['ddsec-vac','🏖️ Vacaciones']];
+    ol.innerHTML='<div class="dd-out-title">Secciones</div>'+secs.map(function(s){return '<a class="dd-out-item" onclick="document.getElementById(\''+s[0]+'\').scrollIntoView({behavior:\'smooth\',block:\'start\'})">'+s[1]+'</a>';}).join('');}
 }
 function ddPulse(code){
   var months=pcMonths().filter(function(m){return pcRows(code,m).length>0;});

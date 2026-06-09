@@ -13,7 +13,7 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 ## Vista proyecto (deep-dive)
 
 ### General
-- [ ] Menú/outline a la izquierda para navegar por secciones.
+- [x] Menú/outline a la izquierda para navegar por secciones.
 
 ### Pulse Check
 - [x] Toggle tipo pill: **"Mes actual"** (tabla de respuestas del mes por dimensión, estilo deep-dive) vs **"Línea de tiempo"** (la tabla actual), en la misma sección.
