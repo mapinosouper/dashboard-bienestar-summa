@@ -27,12 +27,12 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 - [ ] Lista de comentarios **colapsable**.
 
 ### Trasnoches
-- [ ] Por default **no mostrar proyectos OK**; toggle para activarlos.
+- [x] Por default **no mostrar proyectos OK**; toggle para activarlos.
 - [ ] Vista resumen: **% de personas** del proyecto en trasnoche / en tardío, **n° de trasnoches**, y **gráfico** del n° total de trasnoches del equipo agrupado **por semana**.
 
 ### Vacaciones
 - [ ] Columna **futuras editable y persistida** (Supabase, admin).
-- [ ] **Eliminar columna "Estado"**.
+- [x] **Eliminar columna "Estado"**.
 
 ---
 
@@ -42,8 +42,8 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 - [ ] Tabla de **promedio general Summa con apertura por cargo** (general, Analista, Asociado/a).
 
 ## Panel Pit Stop
-- [ ] Destacar distinto los proyectos con **+14 días sin Pit Stop (o nunca)** → **pill de alerta junto al nombre**.
-- [ ] **Sacar la fila OTB** (ese "proyecto" nunca debe tener Pit Stop).
+- [x] Destacar distinto los proyectos con **+14 días sin Pit Stop (o nunca)** → **pill de alerta junto al nombre**.
+- [x] **Sacar la fila OTB** (ese "proyecto" nunca debe tener Pit Stop).
 
 ## Panel Trasnoche
-- [ ] En el selector de semanas, texto **grisáceo a la derecha con las fechas** que abarca la semana (solo al elegir; el `WXX` se queda en el selector).
+- [x] En el selector de semanas, texto **grisáceo a la derecha con las fechas** que abarca la semana (solo al elegir; el `WXX` se queda en el selector).
