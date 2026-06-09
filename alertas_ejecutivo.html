@@ -375,7 +375,11 @@ function setData(d){
 }
 function pcCol(i){return PCH[i];} function psCol(i){return PSH[i];}
 function buildRegistry(){var p=DATA._proj,reg={};DATA.proj.forEach(function(r){var raw=String(r[p.code]||'').trim();var code=normCode(raw);if(!code)return;var name=String(r[p.nombre]||'').trim();var cargo=String(r[p.cargo]||'').trim();if(!reg[code])reg[code]={code:code,label:(DATA.projMeta&&DATA.projMeta[raw])||raw,people:[],pset:{}};if(name&&!reg[code].pset[name]){reg[code].people.push({name:name,cargo:cargo});reg[code].pset[name]=1;}});return reg;}
-function personCodes(name){if(PP[name])return PP[name];var vt=nameTokens(name),best=null,bn=0;STAFF.forEach(function(s){var n=interCount(vt,s.tokens);if(n>bn){bn=n;best=s;}});return(bn>=2&&best)?best.codes:[];}
+// ── Homologación de nombres: toda persona se muestra con su forma canónica del staffing (si existe) ──
+function matchStaff(raw){var t=nameTokens(raw);if(!t.length)return null;var best=null,bn=0;STAFF.forEach(function(s){var n=interCount(t,s.tokens);if(n>bn){bn=n;best=s;}});return bn>=2?best:null;}
+function canonName(raw){var s=matchStaff(raw);return s?s.name.replace(/\s+/g,' ').trim():String(raw||'').replace(/\s+/g,' ').trim();}
+function nameMatch(a,b){return interCount(nameTokens(a),nameTokens(b))>=2;}
+function personCodes(name){if(PP[name])return PP[name];var s=matchStaff(name);return s?s.codes:[];}
 function personProjects(reg){var m={};Object.keys(reg).forEach(function(c){reg[c].people.forEach(function(p){(m[p.name]=m[p.name]||[]).push(c);});});return m;}
 function pcRowMes(r){var raw=String(r[pcCol(PC_IDX.mes)]||'').trim();if(!raw)return '';if(parseMesKey(raw))return raw;var low=raw.toLowerCase(),mo=null;for(var m in MESES_ES){if(low.indexOf(m)>=0){mo=m;break;}}if(!mo)return raw;var ts=String(r[pcCol(1)]||'');var ym=ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);var yr=ym?(+ym[3]<100?2000+(+ym[3]):+ym[3]):null;return mo.charAt(0).toUpperCase()+mo.slice(1)+(yr?' '+yr:'');}
 function pcMonths(){var s={};DATA.pc.forEach(function(r){var m=pcRowMes(r);if(m)s[m]=1;});var rd=new Date(REF),rk=rd.getFullYear()*100+(rd.getMonth()+1);return Object.keys(s).filter(function(m){var k=parseMesKey(m);return k==null||k<=rk;}).sort(function(a,b){return(parseMesKey(a)||0)-(parseMesKey(b)||0);});}
@@ -384,9 +388,9 @@ function psRowsOf(code){return DATA.ps.filter(function(r){return normCode(r[psCo
 function psGrouped(code){var g={};psRowsOf(code).forEach(function(r){var f=String(r[psCol(PS.fecha)]||'').trim();(g[f]=g[f]||[]).push(r);});return Object.keys(g).sort().map(function(f){return{fecha:f,ts:toMidnight(f),rows:g[f]};});}
 function psLatest(code){var g=psGrouped(code);return g.length?g[g.length-1]:null;}
 function trRowsOf(code){var k=DATA._tr.programa;return DATA.tr.filter(function(r){return normCode(r[k])===code;});}
-function trEnriched(rows){var t=DATA._tr;return rows.map(function(r){var d=parseTRDate(r[t.fecha]);return{name:((r[t.nombre]||'')+' '+(r[t.apellido]||'')).trim(),date:d,wk:d?weekKey(d):null,h:parseTimeHour(r[t.hora]),hora:String(r[t.hora]||'')};});}
+function trEnriched(rows){var t=DATA._tr;return rows.map(function(r){var d=parseTRDate(r[t.fecha]);return{name:canonName((r[t.nombre]||'')+' '+(r[t.apellido]||'')),date:d,wk:d?weekKey(d):null,h:parseTimeHour(r[t.hora]),hora:String(r[t.hora]||'')};});}
 function trPeriodKey(d,group){if(!d)return null;if(group==='mes')return d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1);return weekKey(d);}
-function vacRowByName(name){var k=DATA._vac.nombre;return DATA.vac.filter(function(r){return String(r[k]||'').trim()===name;})[0]||null;}
+function vacRowByName(name){var k=DATA._vac.nombre;return DATA.vac.filter(function(r){return nameMatch(String(r[k]||''),name);})[0]||null;}
 function vacSaldo(r){var v=DATA._vac;return Math.round(((parseN(r[v.salL])||0)+(parseN(r[v.salA])||0))*10)/10;}
 function vacFuturas(r){var v=DATA._vac;return Math.round(((parseN(r[v.futL])||0)+(parseN(r[v.futA])||0))*10)/10;}
 
@@ -419,7 +423,7 @@ function detectTraslados(code,out){
   if(night.length)out.push({src:'traslados',sev:'critico',title:night.length+' trasnoche'+(night.length>1?'s':'')+' (llegada post 00:00)',detail:'Semana más reciente',people:uniq(night.map(function(x){return x.name;})),temporal:nightP>0?'persistente':'nuevo'});
   if(late.length)out.push({src:'traslados',sev:'vigilar',title:late.length+' llegada'+(late.length>1?'s':'')+' tardía'+(late.length>1?'s':'')+' (21:00–00:00)',detail:'Semana más reciente',people:uniq(late.map(function(x){return x.name;})),temporal:lateP>0?'persistente':'nuevo'});
 }
-function detectVacGlobal(){var byProj={},transversal=[];var k=DATA._vac.nombre;DATA.vac.forEach(function(r){var name=String(r[k]||'').trim();if(!name)return;var saldo=vacSaldo(r);if(saldo<=15)return;var codes=personCodes(name);if(codes.length===1)(byProj[codes[0]]=byProj[codes[0]]||[]).push({name:name,saldo:saldo});else transversal.push({name:name,saldo:saldo});});return{byProj:byProj,transversal:transversal};}
+function detectVacGlobal(){var byProj={},transversal=[];var k=DATA._vac.nombre;DATA.vac.forEach(function(r){var name=String(r[k]||'').trim();if(!name)return;var saldo=vacSaldo(r);if(saldo<=15)return;var codes=personCodes(name);var cn=canonName(name);if(codes.length===1)(byProj[codes[0]]=byProj[codes[0]]||[]).push({name:cn,saldo:saldo});else transversal.push({name:cn,saldo:saldo});});return{byProj:byProj,transversal:transversal};}
 
 function tierOf(a){var crit=a.filter(function(x){return x.sev==='critico';});var cp={};crit.forEach(function(x){(x.people||[]).forEach(function(p){cp[p]=1;});});if(crit.length>=2||Object.keys(cp).length>=2)return'critico';if(crit.length>=1||a.some(function(x){return x.sev==='vigilar';}))return'vigilar';if(a.some(function(x){return x.sev==='ceguera';}))return'ceguera';return'ok';}
 function scoreOf(a){var w={critico:3,vigilar:1,ceguera:1};return a.reduce(function(s,x){return s+(w[x.sev]||0);},0);}
@@ -428,7 +432,7 @@ function affectedOf(a){var s={};a.forEach(function(x){(x.people||[]).forEach(fun
 // ════════ MODELO ════════
 var REG,PP,STAFF=[],MODEL;
 function buildModel(){
-  REG=buildRegistry();PP=personProjects(REG);STAFF=Object.keys(PP).map(function(n){return{tokens:nameTokens(n),codes:PP[n]};});var vac=detectVacGlobal();
+  REG=buildRegistry();PP=personProjects(REG);STAFF=Object.keys(PP).map(function(n){return{name:n,tokens:nameTokens(n),codes:PP[n]};});var vac=detectVacGlobal();
   var projects=Object.keys(REG).map(function(code){
     var a=[];detectPulse(code,a);detectPitstop(code,a);detectTraslados(code,a);
     var vp=vac.byProj[code];if(vp&&vp.length)a.push({src:'vacaciones',sev:'vigilar',title:vp.length+' persona'+(vp.length>1?'s':'')+' con saldo > 15 días',detail:vp.map(function(x){return x.name+' ('+x.saldo+'d)';}).join('  ·  '),people:vp.map(function(x){return x.name;}),temporal:null});
@@ -647,7 +651,7 @@ function renderTraslados(){
 // ════════ RENDER · PANEL VACACIONES ════════
 function renderVacaciones(){
   var body=document.getElementById('vac-body');var v=DATA._vac;
-  var data=DATA.vac.map(function(r){var name=String(r[v.nombre]||'').trim();var saldo=vacSaldo(r),fut=vacFuturas(r);var codes=personCodes(name);var proj=codes.length?codes.map(function(c){return REG[c]?REG[c].label:c;}).join(', '):'—';return{name:name,cargo:String(r[v.cargo]||''),saldo:saldo,fut:fut,proj:proj};}).filter(function(x){return x.name;});
+  var data=DATA.vac.map(function(r){var name=String(r[v.nombre]||'').trim();var saldo=vacSaldo(r),fut=vacFuturas(r);var codes=personCodes(name);var proj=codes.length?codes.map(function(c){return REG[c]?REG[c].label:c;}).join(', '):'—';return{name:canonName(name),cargo:String(r[v.cargo]||''),saldo:saldo,fut:fut,proj:proj};}).filter(function(x){return x.name;});
   data.sort(function(a,b){return b.saldo-a.saldo;});
   var high=data.filter(function(x){return x.saldo>15;}).length;var prom=data.length?Math.round(data.reduce(function(s,x){return s+x.saldo;},0)/data.length*10)/10:0;
   var kpis='<div class="kpis"><div class="kpi alert"><div class="v">'+high+'</div><div class="l">Saldo &gt; 15 días</div></div><div class="kpi"><div class="v">'+data.length+'</div><div class="l">Personas</div></div><div class="kpi"><div class="v">'+prom+'d</div><div class="l">Saldo promedio</div></div></div>';
