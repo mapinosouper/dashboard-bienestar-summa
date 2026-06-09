@@ -171,8 +171,10 @@ a{color:inherit}
 .dtable tr:last-child td{border-bottom:none}
 .dtable tbody tr:hover td{background:rgba(0,190,214,.045)}
 .dtable .avg-row td{font-weight:700;background:rgba(3,24,67,.035)}
-.dtable.sticky-first th:first-child,.dtable.sticky-first td:first-child{position:sticky;left:0;background:var(--card);z-index:1;box-shadow:1px 0 0 var(--border)}
+.dtable.sticky-first thead th:first-child,.dtable.sticky-first tbody tr:not(.grp) td:first-child{position:sticky;left:0;background:var(--card);z-index:1;box-shadow:1px 0 0 var(--border)}
 .dtable.sticky-first thead th:first-child{z-index:2}
+.dtable td.qcol,.dtable th.qcol{white-space:normal;min-width:190px;max-width:320px;line-height:1.3;font-weight:600;color:var(--primary)}
+.dtable tr.grp td{background:var(--bg);font-weight:800;color:var(--primary);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px}
 .scell{display:inline-block;min-width:32px;padding:2px 7px;border-radius:6px;font-weight:700;color:#fff}
 .namecell{font-weight:600;color:var(--primary)}
 .yes{color:var(--ok);font-weight:700}.no{color:var(--critico);font-weight:700}.warnflag{color:var(--vigilar-d);font-weight:700}
@@ -527,23 +529,25 @@ function ddPulse(code){
 }
 function ddPitstop(code){
   var groups=psGrouped(code);if(!groups.length)return '<div class="empty">Este proyecto no tiene Pit Stops registrados.</div>';
+  function whoOf(r,i){return String(r[psCol(PS.nombre)]||'').trim()||('Resp. '+(i+1));}
+  function numCell(v){var n=parseN(v);return '<td class="num" style="color:'+scoreColor(n)+';font-weight:700">'+(n!=null?n:'—')+'</td>';}
+  function siCell(v,mode){var s=isSi(v);if(s===null)return '<td class="num muted">—</td>';if(mode==='good')return '<td class="num">'+(s?'<span class="yes">Sí</span>':'<span class="no">No</span>')+'</td>';return '<td class="num">'+(s?'<span class="warnflag">Sí</span>':'<span class="muted">No</span>')+'</td>';}
   var h='';
   groups.slice().reverse().forEach(function(g,idx){
-    var recent=(REF-g.ts)>=0&&(REF-g.ts)<=14*864e5;
-    h+='<div class="card"><div class="card-h">Pit Stop · '+esc(g.fecha)+' '+(idx===0?'<span class="badge '+(recent?'b-ok':'b-late')+'" style="margin-left:6px">'+(recent?'reciente':'+14 días')+'</span>':'')+'</div>';
-    var head='<th>Persona</th>'+PS.nums.map(function(ci){return '<th class="num" title="'+esc(shortQ(psCol(ci)))+'">'+esc(shortQ(psCol(ci)).split(' ')[0])+'</th>';}).join('')+PS.alerts_si_good.map(function(ci){return '<th class="num" title="'+esc(shortQ(psCol(ci)))+'">'+esc(initials(shortQ(psCol(ci))))+'</th>';}).join('')+PS.dec_si_bad.map(function(ci){return '<th class="num" title="'+esc(shortQ(psCol(ci)))+'">'+esc(initials(shortQ(psCol(ci))))+'</th>';}).join('');
-    var rows='';
-    g.rows.forEach(function(r){
-      rows+='<tr><td class="namecell">'+esc(String(r[psCol(PS.nombre)]||''))+'</td>';
-      PS.nums.forEach(function(ci){var v=parseN(r[psCol(ci)]);rows+='<td class="num" style="color:'+scoreColor(v)+';font-weight:700">'+(v!=null?v:'—')+'</td>';});
-      PS.alerts_si_good.forEach(function(ci){var s=isSi(r[psCol(ci)]);rows+='<td class="num">'+(s===true?'<span class="yes">Sí</span>':s===false?'<span class="no">No</span>':'—')+'</td>';});
-      PS.dec_si_bad.forEach(function(ci){var s=isSi(r[psCol(ci)]);rows+='<td class="num">'+(s===true?'<span class="warnflag">Sí</span>':s===false?'<span class="muted">No</span>':'—')+'</td>';});
-      rows+='</tr>';
-    });
-    h+='<div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
-    h+='<div class="card-sub" style="margin-top:6px">Señales: <span class="yes">Sí</span> = bueno · <span class="no">No</span> = alerta. Por discutir (últimas 2): <span class="warnflag">Sí</span> = a conversar.</div>';
-    var coms=[];g.rows.forEach(function(r){PS.texts.forEach(function(ci){var t=String(r[psCol(ci)]||'').trim();if(t)coms.push('<b>'+esc(String(r[psCol(PS.nombre)]||''))+':</b> '+esc(t));});});
-    if(coms.length)h+='<div style="margin-top:8px;font-size:12px;line-height:1.5">'+coms.map(function(c){return '<div style="padding:4px 0;border-top:1px solid var(--line)">'+c+'</div>';}).join('')+'</div>';
+    var recent=(REF-g.ts)>=0&&(REF-g.ts)<=14*864e5;var resp=g.rows,ncols=1+resp.length;
+    h+='<div class="card"><div class="card-h">Pit Stop · '+esc(g.fecha)+' '+(idx===0?'<span class="badge '+(recent?'b-ok':'b-late')+'" style="margin-left:6px">'+(recent?'reciente':'+14 días')+'</span>':'')+'<span class="muted" style="font-weight:400;font-size:11px;margin-left:8px">'+resp.length+' respuesta'+(resp.length!==1?'s':'')+'</span></div>';
+    var head='<th class="qcol">Pregunta</th>'+resp.map(function(r,i){return '<th class="num">'+esc(whoOf(r,i))+'</th>';}).join('');
+    function grp(t){return '<tr class="grp"><td colspan="'+ncols+'">'+t+'</td></tr>';}
+    function qrow(ci,mode){return '<tr><td class="qcol">'+esc(shortQ(psCol(ci)))+'</td>'+resp.map(function(r){return mode==='num'?numCell(r[psCol(ci)]):siCell(r[psCol(ci)],mode);}).join('')+'</tr>';}
+    var rows=grp('Termómetro · escala 1–10');
+    PS.nums.forEach(function(ci){rows+=qrow(ci,'num');});
+    rows+=grp('Señales de gestión · Sí = bueno');
+    PS.alerts_si_good.forEach(function(ci){rows+=qrow(ci,'good');});
+    rows+=grp('Por discutir · Sí = a conversar');
+    PS.dec_si_bad.forEach(function(ci){rows+=qrow(ci,'bad');});
+    h+='<div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    var coms=[];resp.forEach(function(r,i){PS.texts.forEach(function(ci){var t=String(r[psCol(ci)]||'').trim();if(t&&t!=='-')coms.push('<b>'+esc(whoOf(r,i))+'</b> · <span class="muted">'+esc(shortQ(psCol(ci)))+'</span><br>'+esc(t));});});
+    if(coms.length)h+='<div class="card-sub" style="margin-top:12px;margin-bottom:6px">Comentarios</div><div style="font-size:12px;line-height:1.5">'+coms.map(function(c){return '<div style="padding:6px 0;border-top:1px solid var(--line)">'+c+'</div>';}).join('')+'</div>';
     h+='</div>';
   });
   return h;
