@@ -1,0 +1,14 @@
+# Datos reales de personas — NUNCA al repo (se cargan en el navegador / Supabase)
+data/
+
+# Internos / temporales
+claude_md.md
+dashboard_bienestar.html
+*.zip
+.DS_Store
+.claude/
+node_modules/
+
+# Secretos (por si acaso)
+.env
+*service_role*
