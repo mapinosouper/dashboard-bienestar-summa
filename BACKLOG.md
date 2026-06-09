@@ -16,9 +16,9 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 - [ ] Menú/outline a la izquierda para navegar por secciones.
 
 ### Pulse Check
-- [ ] Toggle tipo pill: **"Mes actual"** (tabla de respuestas del mes por dimensión, estilo deep-dive) vs **"Línea de tiempo"** (la tabla actual), en la misma sección.
-- [ ] Ordenar la tabla **antiguo → reciente**.
-- [ ] La "Variación" = diferencia entre los **últimos 2 registros**.
+- [x] Toggle tipo pill: **"Mes actual"** (tabla de respuestas del mes por dimensión, estilo deep-dive) vs **"Línea de tiempo"** (la tabla actual), en la misma sección.
+- [x] Ordenar la tabla **antiguo → reciente**.
+- [x] La "Variación" = diferencia entre los **últimos 2 registros**.
 
 ### Pit Stop
 - [x] Corregir escala a **1–5** (no 1–10).
@@ -38,8 +38,8 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 
 ## Panel Pulse Check
 - [x] Colores: **≤4 rojo · 5–7 ámbar · ≥8 verde**.
-- [ ] **Dar vuelta los ejes** (proyecto ↔ dimensión).
-- [ ] Tabla de **promedio general Summa con apertura por cargo** (general, Analista, Asociado/a).
+- [x] **Dar vuelta los ejes** (proyecto ↔ dimensión).
+- [x] Tabla de **promedio general Summa con apertura por cargo** (general, Analista, Asociado/a).
 
 ## Panel Pit Stop
 - [x] Destacar distinto los proyectos con **+14 días sin Pit Stop (o nunca)** → **pill de alerta junto al nombre**.
