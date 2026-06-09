@@ -22,9 +22,9 @@ Recibido. Marcamos `[x]` a medida que se cierra.
 
 ### Pit Stop
 - [x] Corregir escala a **1–5** (no 1–10).
-- [ ] Vista comparativa: seleccionar **hasta los 3 últimos Pit Stop**, mostrando el **promedio de cada respuesta** para ver el movimiento entre ciclos (solo numéricas).
-- [ ] La tabla de detalle (numéricas + binarias) solo para el **último Pit Stop**.
-- [ ] Lista de comentarios **colapsable**.
+- [x] Vista comparativa: seleccionar **hasta los 3 últimos Pit Stop**, mostrando el **promedio de cada respuesta** para ver el movimiento entre ciclos (solo numéricas).
+- [x] La tabla de detalle (numéricas + binarias) solo para el **último Pit Stop**.
+- [x] Lista de comentarios **colapsable**.
 
 ### Trasnoches
 - [x] Por default **no mostrar proyectos OK**; toggle para activarlos.

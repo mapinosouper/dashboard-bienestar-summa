@@ -186,6 +186,12 @@ a{color:inherit}
 .pillbar{display:flex;gap:6px;margin:0 0 12px}
 .pill{font-size:12px;font-weight:600;padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--muted);cursor:pointer}
 .pill.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.collapse{margin-top:12px}
+.collapse-h{font-size:12px;font-weight:700;color:var(--primary);cursor:pointer;user-select:none;padding-top:9px;border-top:1px solid var(--line)}
+.collapse-h .exp-toggle{display:inline-block}
+.collapse.open .collapse-h .exp-toggle{transform:rotate(90deg)}
+.collapse-b{display:none;margin-top:4px}
+.collapse.open .collapse-b{display:block}
 .kpi{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:15px 18px;border-top:4px solid var(--primary)}
 .kpi.alert{border-top-color:var(--critico)}.kpi.warn{border-top-color:var(--vigilar)}
 .kpi .v{font-size:27px;font-weight:800;color:var(--primary);line-height:1}
@@ -521,7 +527,7 @@ function renderProyecto(){
   h+='<div class="section-label">Alertas activas</div>';
   h+=p.alerts.length?('<div class="card">'+alertDetailHTML(p.alerts)+'</div>'):'<div class="empty">✅ Sin alertas activas en este proyecto.</div>';
   h+='<div class="section-label">📊 Pulse Check</div>'+ddPulse(code);
-  h+='<div class="section-label">📋 Pit Stop — todas las respuestas</div>'+ddPitstop(code);
+  h+='<div class="section-label">📋 Pit Stop</div>'+ddPitstop(code);
   h+='<div class="section-label">🚗 Traslados PM — todos los viajes</div>'+ddTraslados(code);
   h+='<div class="section-label">🏖️ Vacaciones del equipo</div>'+ddVac(code);
   body.innerHTML=h;
@@ -559,23 +565,29 @@ function ddPitstop(code){
   function numCell(v){var n=parseN(v);return '<td class="num" style="color:'+scoreColor(n,'pitstop')+';font-weight:700">'+(n!=null?n:'—')+'</td>';}
   function siCell(v,mode){var s=isSi(v);if(s===null)return '<td class="num muted">—</td>';if(mode==='good')return '<td class="num">'+(s?'<span class="yes">Sí</span>':'<span class="no">No</span>')+'</td>';return '<td class="num">'+(s?'<span class="warnflag">Sí</span>':'<span class="muted">No</span>')+'</td>';}
   var h='';
-  groups.slice().reverse().forEach(function(g,idx){
-    var recent=(REF-g.ts)>=0&&(REF-g.ts)<=14*864e5;var resp=g.rows,ncols=1+resp.length;
-    h+='<div class="card"><div class="card-h">Pit Stop · '+esc(g.fecha)+' '+(idx===0?'<span class="badge '+(recent?'b-ok':'b-late')+'" style="margin-left:6px">'+(recent?'reciente':'+14 días')+'</span>':'')+'<span class="muted" style="font-weight:400;font-size:11px;margin-left:8px">'+resp.length+' respuesta'+(resp.length!==1?'s':'')+'</span></div>';
-    var head='<th class="qcol">Pregunta</th>'+resp.map(function(r,i){return '<th class="num">'+esc(whoOf(r,i))+'</th>';}).join('');
-    function grp(t){return '<tr class="grp"><td colspan="'+ncols+'">'+t+'</td></tr>';}
-    function qrow(ci,mode){return '<tr><td class="qcol">'+esc(shortQ(psCol(ci)))+'</td>'+resp.map(function(r){return mode==='num'?numCell(r[psCol(ci)]):siCell(r[psCol(ci)],mode);}).join('')+'</tr>';}
-    var rows=grp('Termómetro · escala 1–5');
-    PS.nums.forEach(function(ci){rows+=qrow(ci,'num');});
-    rows+=grp('Señales de gestión · Sí = bueno');
-    PS.alerts_si_good.forEach(function(ci){rows+=qrow(ci,'good');});
-    rows+=grp('Por discutir · Sí = a conversar');
-    PS.dec_si_bad.forEach(function(ci){rows+=qrow(ci,'bad');});
-    h+='<div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
-    var coms=[];resp.forEach(function(r,i){PS.texts.forEach(function(ci){var t=String(r[psCol(ci)]||'').trim();if(t&&t!=='-')coms.push('<b>'+esc(whoOf(r,i))+'</b> · <span class="muted">'+esc(shortQ(psCol(ci)))+'</span><br>'+esc(t));});});
-    if(coms.length)h+='<div class="card-sub" style="margin-top:12px;margin-bottom:6px">Comentarios</div><div style="font-size:12px;line-height:1.5">'+coms.map(function(c){return '<div style="padding:6px 0;border-top:1px solid var(--line)">'+c+'</div>';}).join('')+'</div>';
-    h+='</div>';
-  });
+  // ── 1) Comparativa de ciclos (numéricas, últimos 3) ──
+  if(groups.length>=2){
+    var last3=groups.slice(-3);
+    var ch='<th class="qcol">Pregunta</th>'+last3.map(function(g){return '<th class="num">'+esc(g.fecha)+'</th>';}).join('')+(last3.length>=2?'<th class="num">Var últ. 2</th>':'');
+    var cr=PS.nums.map(function(ci){
+      var cells=last3.map(function(g){return '<td class="num">'+scell(numAvg(g.rows,psCol(ci)),'pitstop')+'</td>';}).join('');
+      var vc='';if(last3.length>=2){vc='<td class="num">'+varCell(numAvg(last3[last3.length-1].rows,psCol(ci)),numAvg(last3[last3.length-2].rows,psCol(ci)))+'</td>';}
+      return '<tr><td class="qcol">'+esc(shortQ(psCol(ci)))+'</td>'+cells+vc+'</tr>';
+    }).join('');
+    h+='<div class="card"><div class="card-h">Comparativa de ciclos · promedio por pregunta (últimos '+last3.length+')</div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+ch+'</tr></thead><tbody>'+cr+'</tbody></table></div></div>';
+  }
+  // ── 2) Detalle del último Pit Stop (numéricas + binarias) ──
+  var g=groups[groups.length-1];var recent=(REF-g.ts)>=0&&(REF-g.ts)<=14*864e5;var resp=g.rows,ncols=1+resp.length;
+  var head='<th class="qcol">Pregunta</th>'+resp.map(function(r,i){return '<th class="num">'+esc(whoOf(r,i))+'</th>';}).join('');
+  function grp(t){return '<tr class="grp"><td colspan="'+ncols+'">'+t+'</td></tr>';}
+  function qrow(ci,mode){return '<tr><td class="qcol">'+esc(shortQ(psCol(ci)))+'</td>'+resp.map(function(r){return mode==='num'?numCell(r[psCol(ci)]):siCell(r[psCol(ci)],mode);}).join('')+'</tr>';}
+  var rows=grp('Termómetro · escala 1–5');PS.nums.forEach(function(ci){rows+=qrow(ci,'num');});
+  rows+=grp('Señales de gestión · Sí = bueno');PS.alerts_si_good.forEach(function(ci){rows+=qrow(ci,'good');});
+  rows+=grp('Por discutir · Sí = a conversar');PS.dec_si_bad.forEach(function(ci){rows+=qrow(ci,'bad');});
+  h+='<div class="card"><div class="card-h">Detalle del último Pit Stop · '+esc(g.fecha)+' <span class="badge '+(recent?'b-ok':'b-late')+'" style="margin-left:6px">'+(recent?'reciente':'+14 días')+'</span><span class="muted" style="font-weight:400;font-size:11px;margin-left:8px">'+resp.length+' respuesta'+(resp.length!==1?'s':'')+'</span></div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var coms=[];resp.forEach(function(r,i){PS.texts.forEach(function(ci){var t=String(r[psCol(ci)]||'').trim();if(t&&t!=='-')coms.push('<b>'+esc(whoOf(r,i))+'</b> · <span class="muted">'+esc(shortQ(psCol(ci)))+'</span><br>'+esc(t));});});
+  if(coms.length)h+='<div class="collapse"><div class="collapse-h" onclick="this.parentNode.classList.toggle(\'open\')"><span class="exp-toggle">›</span> Comentarios ('+coms.length+')</div><div class="collapse-b" style="font-size:12px;line-height:1.5">'+coms.map(function(c){return '<div style="padding:6px 0;border-top:1px solid var(--line)">'+c+'</div>';}).join('')+'</div></div>';
+  h+='</div>';
   return h;
 }
 function initials(s){return s.split(/\s+/).map(function(w){return w[0]||'';}).join('').toUpperCase().slice(0,3);}
