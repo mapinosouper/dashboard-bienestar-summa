@@ -550,7 +550,7 @@ function alertDetailHTML(alerts){
 function renderResumen(){
   var data=MODEL,counts={critico:0,vigilar:0,ceguera:0,ok:0};data.projects.forEach(function(p){counts[p.tier]++;});
   var lastMes=pcMonths().slice(-1)[0]||'';
-  document.getElementById('r-sub').textContent='Ordenado por urgencia · referencia '+new Date(REF).toLocaleDateString('es-CL',{day:'2-digit',month:'long',year:'numeric'})+(lastMes?'  ·  Pulse: '+lastMes:'');
+  document.getElementById('r-sub').textContent='Ordenado por urgencia · referencia '+new Date(REF).toLocaleDateString('es-CL',{day:'2-digit',month:'long',year:'numeric'})+(lastMes?'  ·  Pulse: '+lastMes:'')+(staffingLoadedAt()?'  ·  Staffing: '+fmtStaffDate(staffingLoadedAt()):'');
   var strip=[{k:'critico',dsc:'≥2 señales o personas'},{k:'vigilar',dsc:'Tendencia / acumulación'},{k:'ceguera',dsc:'Sin dato reciente'},{k:'ok',dsc:'Proyectos sanos'}];
   document.getElementById('r-triage').innerHTML=strip.map(function(s){return '<div class="tr-pill s-'+s.k+'"><div class="tr-num">'+counts[s.k]+'</div><div class="tr-lbl">'+SEV[s.k].label+'</div><div class="tr-dsc">'+s.dsc+'</div></div>';}).join('');
   var only=document.getElementById('only-alerts').checked;
@@ -732,13 +732,19 @@ function fillTrPeriods(){var group=document.getElementById('tr-group').value;var
   p2.innerHTML='<option value="">— ninguno —</option>'+ps.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');
   if(ps.length){p1.value=ps[ps.length-1];if(ps.length>=2)p2.value=ps[ps.length-2];}}
 function trDelta(val,prevVal,risk){if(prevVal==null)return '';var d=val-prevVal;if(d===0)return ' <span class="kpi-delta neu">=</span>';var cls=risk?(d>0?'bad':'good'):'neu';return ' <span class="kpi-delta '+cls+'">'+(d>0?'▲ +'+d:'▼ '+Math.abs(d))+'</span>';}
-function trCount(period,group){var tot=0,late=0,night=0,perProj={};
-  Object.keys(REG).forEach(function(code){
-    var en=trEnriched(trRowsOf(code)).filter(function(x){return x.date&&trPeriodKey(x.date,group)===period;});
-    var l=en.filter(function(x){return x.h!=null&&x.h>=21&&x.h<24;}),n=en.filter(function(x){return x.h!=null&&x.h>=0&&x.h<6;});
-    tot+=en.length;late+=l.length;night+=n.length;
-    if(en.length)perProj[code]={total:en.length,late:l.length,night:n.length,people:uniq(l.concat(n).map(function(x){return x.name;}))};
+function trCount(period,group){var tot=0,late=0,night=0,perProj={};var t=DATA._tr;
+  // Cuenta TODOS los traslados del período (igual que el gráfico), agrupados por su código de gasto real.
+  // Antes solo contaba proyectos del registro (REG), por eso las cards daban 0 en semanas sin match.
+  DATA.tr.forEach(function(r){
+    var d=parseTRDate(r[t.fecha]);if(!d||trPeriodKey(d,group)!==period)return;
+    var code=normCode(r[t.programa])||'(sin código)';
+    var h=parseTimeHour(r[t.hora]);var isL=h!=null&&h>=21&&h<24,isN=h!=null&&h>=0&&h<6;
+    var p=perProj[code]||(perProj[code]={total:0,late:0,night:0,_pe:{}});
+    p.total++;tot++;
+    if(isL){p.late++;late++;}if(isN){p.night++;night++;}
+    if(isL||isN){var nm=canonName((r[t.nombre]||'')+' '+(r[t.apellido]||''));if(nm)p._pe[nm]=1;}
   });
+  Object.keys(perProj).forEach(function(c){perProj[c].people=Object.keys(perProj[c]._pe);delete perProj[c]._pe;});
   return{tot:tot,late:late,night:night,perProj:perProj};}
 function trWeeklyChart(){
   var byWeek={};DATA.tr.forEach(function(r){var d=parseTRDate(r[DATA._tr.fecha]);if(!d)return;var wk=weekKey(d),h=parseTimeHour(r[DATA._tr.hora]);byWeek[wk]=byWeek[wk]||{late:0,night:0};if(h!=null&&h>=0&&h<6)byWeek[wk].night++;else if(h!=null&&h>=21&&h<24)byWeek[wk].late++;});
@@ -760,12 +766,12 @@ function renderTraslados(){
     '<div class="kpi warn"><div class="v">'+cur.late+trDelta(cur.late,prev?prev.late:null,true)+'</div><div class="l">Tardíos 21:00–00:00</div></div>'+
     '<div class="kpi alert"><div class="v">'+cur.night+trDelta(cur.night,prev?prev.night:null,true)+'</div><div class="l">Trasnoches post 00:00</div></div></div>';
   var showOk=document.getElementById('tr-showok')&&document.getElementById('tr-showok').checked;
-  var rowsData=Object.keys(cur.perProj).map(function(code){return{code:code,label:REG[code].label,d:cur.perProj[code]};}).filter(function(x){return showOk||x.d.late>0||x.d.night>0;});
+  var rowsData=Object.keys(cur.perProj).map(function(code){return{code:code,label:REG[code]?REG[code].label:code,d:cur.perProj[code]};}).filter(function(x){return showOk||x.d.late>0||x.d.night>0;});
   rowsData.sort(function(a,b){return(b.d.night*2+b.d.late)-(a.d.night*2+a.d.late);});
   var head='<th>Proyecto</th><th class="num">Viajes</th><th class="num">Tardíos 21–00</th><th class="num">Trasnoches 00–06</th><th class="num">% equipo afectado</th><th>Personas señaladas</th>';
   var rows=rowsData.map(function(r){var d=r.d;var ts=(REG[r.code]&&REG[r.code].people.length)||0;var aff=d.people.length;var pct=ts?Math.round(aff/ts*100):null;
     return '<tr><td class="namecell">'+esc(r.label)+'</td><td class="num">'+d.total+'</td><td class="num">'+(d.late>0?'<span class="badge b-late">'+d.late+'</span>':'0')+'</td><td class="num">'+(d.night>0?'<span class="badge b-night">'+d.night+'</span>':'0')+'</td><td class="num">'+(pct!=null?'<b'+(pct>=50?' style="color:var(--critico)"':'')+'>'+pct+'%</b> <span class="muted" style="font-size:10px">('+aff+'/'+ts+')</span>':'—')+'</td><td>'+(d.people.length?d.people.map(function(p){return '<span class="person">'+esc(p)+'</span>';}).join(' '):'<span class="muted">—</span>')+'</td></tr>';}).join('');
-  body.innerHTML=kpis+trWeeklyChart()+'<div class="tline">Período: <b>'+esc(period)+'</b>'+(period2?' · comparado con '+esc(period2)+' (Δ en los KPIs)':'')+' · agrupado por '+lbl+'.</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+(rows||'<tr><td colspan="6" class="muted">Sin proyectos con tardíos o trasnoches en el período (activa "Mostrar proyectos OK").</td></tr>')+'</tbody></table></div></div>';
+  body.innerHTML=kpis+trWeeklyChart()+'<div class="tline">Período: <b>'+esc(period)+'</b>'+(period2?' · comparado con '+esc(period2)+' (Δ en los KPIs)':'')+' · agrupado por '+lbl+'.'+(staffingLoadedAt()?' · El “% equipo afectado” usa el staffing del '+fmtStaffDate(staffingLoadedAt())+'; los proyectos sin equipo conocido (—) son históricos, anteriores a esa foto.':'')+'</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+(rows||'<tr><td colspan="6" class="muted">Sin proyectos con tardíos o trasnoches en el período (activa "Mostrar proyectos OK").</td></tr>')+'</tbody></table></div></div>';
 }
 
 // ════════ RENDER · PANEL VACACIONES ════════
@@ -800,7 +806,7 @@ function enterWith(d){
   showScreen('app');go('resumen');decorateUserbar();
 }
 function enterReal(){enterWith({pc:UP.pc,ps:UP.ps,tr:UP.tr,vac:UP.vac,proj:UP.proj,projMeta:{},refDate:null});}
-function useDemo(){enterWith(MOCK);}
+function useDemo(){var d=MOCK;if(d&&!d.projHistory)d.projHistory=[{at:(d.refDate||'2026-06-01')+'T09:00:00.000Z',by:'demo@summapartners.com',proj:d.proj}];enterWith(d);}
 function enterFromUpload(){ if(SUPABASE_READY&&ROLE==='admin') publishData(); else enterReal(); }
 function openUpload(){ showScreen('upload'); var b=document.getElementById('up-enter'); if(b){ b.disabled=!['ps','pc','tr','vac','proj'].every(function(k){return UP[k];}); b.textContent=(SUPABASE_READY&&ROLE==='admin')?'Publicar al equipo y entrar →':'Entrar al panel →'; } }
 function setUploadMsg(t){ var m=document.getElementById('up-msg'); if(m)m.textContent=t; }
@@ -854,13 +860,29 @@ function loadRemoteData(){
   });
   }); });
 }
+// ── histórico de staffing (fotos fechadas) — acumula hacia adelante ──
+function appendProjSnapshot(hist,proj,by,iso){
+  hist=Array.isArray(hist)?hist.slice():[];
+  var last=hist[hist.length-1];
+  if(last&&JSON.stringify(last.proj||[])===JSON.stringify(proj||[]))return hist; // staffing sin cambios: no duplicamos la foto
+  hist.push({at:iso,by:by||null,proj:proj||[]});
+  if(hist.length>24)hist=hist.slice(hist.length-24); // tope: últimas 24 fotos
+  return hist;
+}
+function staffingLoadedAt(){var h=DATA&&DATA.projHistory;return h&&h.length?h[h.length-1].at:null;}
+function fmtStaffDate(iso){if(!iso)return '';var d=new Date(iso);return isNaN(d)?'':d.toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});}
 function publishData(){
   if(!SB){ enterReal(); return; }
-  var payload={pc:UP.pc,ps:UP.ps,tr:UP.tr,vac:UP.vac,proj:UP.proj,projMeta:{},refDate:null};
   setUploadMsg('Publicando para el equipo…');
-  SB.from('app_data').update({payload:payload,updated_at:new Date().toISOString(),updated_by:CURRENT_EMAIL}).eq('id',1).then(function(r){
-    if(r.error){ setUploadMsg('Error al publicar: '+r.error.message); return; }
-    enterWith(payload);
+  var nowIso=new Date().toISOString();
+  SB.from('app_data').select('payload').eq('id',1).maybeSingle().then(function(rp){
+    var prevHist=(rp.data&&rp.data.payload&&rp.data.payload.projHistory)||[];
+    var projHistory=appendProjSnapshot(prevHist,UP.proj,CURRENT_EMAIL,nowIso);
+    var payload={pc:UP.pc,ps:UP.ps,tr:UP.tr,vac:UP.vac,proj:UP.proj,projMeta:{},refDate:null,projHistory:projHistory};
+    SB.from('app_data').update({payload:payload,updated_at:nowIso,updated_by:CURRENT_EMAIL}).eq('id',1).then(function(r){
+      if(r.error){ setUploadMsg('Error al publicar: '+r.error.message); return; }
+      enterWith(payload);
+    });
   });
 }
 
