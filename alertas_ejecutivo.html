@@ -682,8 +682,13 @@ function initials(s){return s.split(/\s+/).map(function(w){return w[0]||'';}).jo
 function ddTraslados(code){
   var en=trEnriched(trRowsOf(code));if(!en.length)return '<div class="empty">Sin viajes registrados para este proyecto.</div>';
   en.sort(function(a,b){return(b.date||0)-(a.date||0);});
-  var rows=en.map(function(x){var badge=x.h!=null&&x.h>=0&&x.h<6?'<span class="badge b-night">Trasnoche</span>':x.h!=null&&x.h>=21&&x.h<24?'<span class="badge b-late">Tardío</span>':'<span class="badge b-ok">OK</span>';return '<tr><td class="namecell">'+esc(x.name)+'</td><td>'+(x.date?x.date.toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'2-digit'}):'—')+'</td><td>'+esc(x.hora)+'</td><td>'+badge+'</td></tr>';}).join('');
-  return '<div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr><th>Persona</th><th>Fecha llegada</th><th>Hora</th><th>Clasificación</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  function rowOf(x){var badge=x.h!=null&&x.h<6?'<span class="badge b-night">Trasnoche</span>':x.h!=null&&x.h>=21&&x.h<24?'<span class="badge b-late">Tardío</span>':'<span class="badge b-ok">OK</span>';return '<tr><td class="namecell">'+esc(x.name)+'</td><td>'+(x.date?x.date.toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'2-digit'}):'—')+'</td><td>'+esc(x.hora)+'</td><td>'+badge+'</td></tr>';}
+  var marcados=en.filter(function(x){return x.h!=null&&(x.h<6||x.h>=21);}),ok=en.filter(function(x){return !(x.h!=null&&(x.h<6||x.h>=21));});
+  var head='<thead><tr><th>Persona</th><th>Fecha llegada</th><th>Hora</th><th>Clasificación</th></tr></thead>';
+  var h='<div class="card">';
+  h+=marcados.length?'<div class="dtable-wrap"><table class="dtable">'+head+'<tbody>'+marcados.map(rowOf).join('')+'</tbody></table></div>':'<div class="muted" style="font-size:12.5px;padding:4px 0">✅ Sin tardíos ni trasnoches en este proyecto.</div>';
+  if(ok.length)h+='<div class="collapse"><div class="collapse-h" onclick="this.parentNode.classList.toggle(\'open\')"><span class="exp-toggle">›</span> Viajes OK ('+ok.length+')</div><div class="collapse-b"><div class="dtable-wrap"><table class="dtable">'+head+'<tbody>'+ok.map(rowOf).join('')+'</tbody></table></div></div></div>';
+  return h+'</div>';
 }
 function ddVac(code){
   var team=REG[code].people;if(!team.length)return '<div class="empty">Sin equipo.</div>';
