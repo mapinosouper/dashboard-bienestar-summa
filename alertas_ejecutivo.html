@@ -358,13 +358,14 @@ function vacFut(r,name){var k=canonName(name);return VAC_OV[k]!=null?VAC_OV[k]:v
 function vacFutCell(key,fut){if(vacEditable())return '<input type="number" step="0.5" min="0" class="vac-inp" data-persona="'+esc(key)+'" value="'+(fut!=null?fut:'')+'" onchange="saveVacFut(this)">';return fut>0?fmt(fut)+'d':'<span class="muted">sin pedir</span>';}
 function loadVacOverrides(cb){if(!SB){VAC_OV={};return cb&&cb();}SB.from('vac_overrides').select('persona,futuras').then(function(r){VAC_OV={};if(!r.error&&r.data)r.data.forEach(function(x){VAC_OV[x.persona]=x.futuras;});cb&&cb();});}
 function saveVacFut(inp){var persona=inp.getAttribute('data-persona');var val=inp.value===''?null:parseFloat(inp.value);if(val!=null&&isNaN(val))return;VAC_OV[persona]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('vac_overrides').upsert({persona:persona,futuras:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'persona'}).then(function(r){inp.style.outline='2px solid '+(r.error?'var(--critico)':'var(--ok)');setTimeout(function(){inp.style.outline='';},1200);});}}
-var PS_CONSULTOR={}; // override del consultor (staff) por respuesta de Pit Stop (Supabase): respKey -> nombre
+var PS_CONSULTOR={}; // consultor (staff) asignado por respuesta (Supabase, tabla ps_consultor): respKey -> nombre. Claves Pit Stop: CODE|fecha|id · claves Pulse: "pulse|CODE|id"
 function psEditable(){return SUPABASE_READY&&ROLE==='admin';}
 function psRespKey(r){var code=normCode(r[psCol(PS.proyecto)]);var fecha=String(r[psCol(PS.fecha)]||'').trim();var id=PS.id>=0?String(r[psCol(PS.id)]||'').trim():'';if(!id)id=String(r[psCol(PS.nombre)]||'').trim()||String(r[psCol(PS.correo)]||'').trim();return code+'|'+fecha+'|'+id;}
 function psConsultorOf(r){var k=psRespKey(r);if(PS_CONSULTOR[k]!=null&&String(PS_CONSULTOR[k]).trim()!=='')return PS_CONSULTOR[k];return String(r[psCol(PS.nombre)]||'').trim();}
 function loadPSConsultor(cb){if(!SB){PS_CONSULTOR={};return cb&&cb();}SB.from('ps_consultor').select('resp_key,consultor').then(function(r){PS_CONSULTOR={};if(!r.error&&r.data)r.data.forEach(function(x){PS_CONSULTOR[x.resp_key]=x.consultor;});cb&&cb();});}
-function savePSConsultor(inp){var key=inp.getAttribute('data-key');var val=inp.value.trim();PS_CONSULTOR[key]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('ps_consultor').upsert({resp_key:key,consultor:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'resp_key'}).then(function(r){if(r.error){inp.style.outline='2px solid var(--critico)';setTimeout(function(){inp.style.outline='';},1500);}else{refreshDDPitstop();}});}}
-function refreshDDPitstop(){var el=document.getElementById('ddsec-pitstop');if(el&&CURRENT_PROJ)el.innerHTML='<div class="section-label">📋 Pit Stop</div>'+ddPitstop(CURRENT_PROJ);}
+function pcRespKey(r,code,fb){var id=String(r[pcCol(0)]||'').trim();return 'pulse|'+code+'|'+(id||fb);} // id = columna "Id" del Forms; fallback mes#fila si viene vacía
+function savePCConsultor(inp){var key=inp.getAttribute('data-key');var val=inp.value.trim();PS_CONSULTOR[key]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('ps_consultor').upsert({resp_key:key,consultor:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'resp_key'}).then(function(r){if(r.error){inp.style.outline='2px solid var(--critico)';setTimeout(function(){inp.style.outline='';},1500);}else{refreshDDPulse();}});}}
+function refreshDDPulse(){var b=document.getElementById('dd-pulse-body');if(b&&CURRENT_PROJ)b.innerHTML=ddPulseContent(CURRENT_PROJ,DD_PULSE);}
 
 // ════════ UTILS ════════
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -624,9 +625,15 @@ function ddPulseContent(code,mode){
   var cur=months[months.length-1],prev=months.length>=2?months[months.length-2]:null; // antiguo → reciente
   if(mode==='mes'){
     var rc=pcRows(code,cur);
-    var h='<div class="card"><div class="card-sub">Respuestas del mes · '+esc(cur)+' (Pulse es anónimo; se identifica por cargo)</div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Cargo</th>'+PC_Q_SHORT.map(function(q){return '<th class="num" title="'+esc(q)+'">'+esc(q.split(' ')[0])+'</th>';}).join('')+'</tr></thead><tbody>';
-    rc.forEach(function(r){h+='<tr><td class="cargo">'+esc(String(r[pcCol(PC_IDX.cargo)]||''))+'</td>';for(var qi=0;qi<7;qi++){var v=parseN(r[pcCol(PC_IDX.q0+qi)]);h+='<td class="num" style="color:'+scoreColor(v,'pulse')+';font-weight:'+(v!=null&&v<TH?'700':'500')+'">'+(v!=null?v:'—')+'</td>';}h+='</tr>';});
-    return h+'</tbody></table></div></div>';
+    var dl='',dlId='pc-staff-dl-'+code;
+    if(psEditable()){var seen={},opts='';(REG[code]&&REG[code].people||[]).concat(STAFF).forEach(function(p){var n=String(p.name||'').trim();if(n&&!seen[n]){seen[n]=1;opts+='<option value="'+esc(n)+'">';}});dl='<datalist id="'+dlId+'">'+opts+'</datalist>';}
+    var h=dl+'<div class="card"><div class="card-sub">Respuestas del mes · '+esc(cur)+' (Pulse es anónimo; se identifica por cargo)</div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Cargo</th><th>Consultor</th>'+PC_Q_SHORT.map(function(q){return '<th class="num" title="'+esc(q)+'">'+esc(q.split(' ')[0])+'</th>';}).join('')+'</tr></thead><tbody>';
+    rc.forEach(function(r,i){
+      var key=pcRespKey(r,code,cur+'#'+i),asig=PS_CONSULTOR[key]!=null?String(PS_CONSULTOR[key]).trim():'';
+      var consCell=psEditable()?'<td><input class="ps-cons-inp" list="'+dlId+'" data-key="'+esc(key)+'" value="'+esc(asig)+'" placeholder="—" onchange="savePCConsultor(this)"></td>':'<td>'+(asig?'<span class="namecell">'+esc(asig)+'</span>':'<span class="muted">—</span>')+'</td>';
+      h+='<tr><td class="cargo">'+esc(String(r[pcCol(PC_IDX.cargo)]||''))+'</td>'+consCell;
+      for(var qi=0;qi<7;qi++){var v=parseN(r[pcCol(PC_IDX.q0+qi)]);h+='<td class="num" style="color:'+scoreColor(v,'pulse')+';font-weight:'+(v!=null&&v<TH?'700':'500')+'">'+(v!=null?v:'—')+'</td>';}h+='</tr>';});
+    return h+'</tbody></table></div>'+(psEditable()?'<div class="card-sub" style="margin-top:6px">El "Consultor" es editable, sugiere al equipo del proyecto y se guarda para todos.</div>':'')+'</div>';
   }
   var head='<th>Dimensión</th>'+months.map(function(m){return '<th class="num">'+esc(m)+'</th>';}).join('')+(prev?'<th class="num">Var últ. 2</th>':'')+'<th class="num">Notas &lt;'+TH+'</th>';
   var rows='';
@@ -662,16 +669,10 @@ function ddPitstop(code){
   function grp(t){return '<tr class="grp"><td colspan="'+ncols+'">'+t+'</td></tr>';}
   function qrow(ci,mode){return '<tr><td class="qcol">'+esc(shortQ(psCol(ci)))+'</td>'+resp.map(function(r){return mode==='num'?numCell(r[psCol(ci)]):siCell(r[psCol(ci)],mode);}).join('')+'</tr>';}
   var rows='';
-  if(psEditable()){
-    var dlId='ps-staff-dl-'+code;var seen={},opts='';
-    (REG[code]&&REG[code].people||[]).concat(STAFF).forEach(function(p){var n=String(p.name||'').trim();if(n&&!seen[n]){seen[n]=1;opts+='<option value="'+esc(n)+'">';}});
-    h+='<datalist id="'+dlId+'">'+opts+'</datalist>';
-    rows+='<tr class="cons-row"><td class="qcol">Consultor (staff)</td>'+resp.map(function(r){return '<td class="num"><input class="ps-cons-inp" list="'+dlId+'" data-key="'+esc(psRespKey(r))+'" value="'+esc(PS_CONSULTOR[psRespKey(r)]!=null?PS_CONSULTOR[psRespKey(r)]:(r[psCol(PS.nombre)]||''))+'" placeholder="—" onchange="savePSConsultor(this)"></td>';}).join('')+'</tr>';
-  }
   rows+=grp('Termómetro · escala 1–5');PS.nums.forEach(function(ci){rows+=qrow(ci,'num');});
   rows+=grp('Señales de gestión · Sí = bueno');PS.alerts_si_good.forEach(function(ci){rows+=qrow(ci,'good');});
   rows+=grp('Por discutir · Sí = a conversar');PS.dec_si_bad.forEach(function(ci){rows+=qrow(ci,'bad');});
-  h+='<div class="card"><div class="card-h">Detalle del último Pit Stop · '+esc(g.fecha)+' <span class="badge '+(recent?'b-ok':'b-late')+'" style="margin-left:6px">'+(recent?'reciente':'+14 días')+'</span><span class="muted" style="font-weight:400;font-size:11px;margin-left:8px">'+resp.length+' respuesta'+(resp.length!==1?'s':'')+'</span></div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+(psEditable()?'<div class="card-sub" style="margin-top:6px">El "Consultor (staff)" es editable, sugiere al equipo del proyecto y se guarda para todos.</div>':'');
+  h+='<div class="card"><div class="card-h">Detalle del último Pit Stop · '+esc(g.fecha)+' <span class="badge '+(recent?'b-ok':'b-late')+'" style="margin-left:6px">'+(recent?'reciente':'+14 días')+'</span><span class="muted" style="font-weight:400;font-size:11px;margin-left:8px">'+resp.length+' respuesta'+(resp.length!==1?'s':'')+'</span></div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
   var coms=[];resp.forEach(function(r,i){PS.texts.forEach(function(ci){var t=String(r[psCol(ci)]||'').trim();if(t&&t!=='-')coms.push('<b>'+esc(whoOf(r,i))+'</b> · <span class="muted">'+esc(shortQ(psCol(ci)))+'</span><br>'+esc(t));});});
   if(coms.length)h+='<div class="collapse"><div class="collapse-h" onclick="this.parentNode.classList.toggle(\'open\')"><span class="exp-toggle">›</span> Respuestas descriptivas ('+coms.length+')</div><div class="collapse-b" style="font-size:12px;line-height:1.5">'+coms.map(function(c){return '<div style="padding:6px 0;border-top:1px solid var(--line)">'+c+'</div>';}).join('')+'</div></div>';
   h+='</div>';
