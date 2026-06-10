@@ -201,6 +201,9 @@ a{color:inherit}
 .blabel{font-size:9.5px;color:var(--muted)}
 .vac-inp{width:64px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;outline:none}
 .vac-inp:focus{border-color:var(--cyan)}
+.ps-cons-inp{width:120px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;outline:none}
+.ps-cons-inp:focus{border-color:var(--cyan)}
+.dtable tr.cons-row td{background:rgba(0,190,214,.04)}
 .dd-layout{display:flex;gap:22px;align-items:flex-start}
 .dd-outline{width:172px;flex-shrink:0;position:sticky;top:116px}
 .dd-out-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:0 10px 6px}
@@ -355,6 +358,13 @@ function vacFut(r,name){var k=canonName(name);return VAC_OV[k]!=null?VAC_OV[k]:v
 function vacFutCell(key,fut){if(vacEditable())return '<input type="number" step="0.5" min="0" class="vac-inp" data-persona="'+esc(key)+'" value="'+(fut!=null?fut:'')+'" onchange="saveVacFut(this)">';return fut>0?fmt(fut)+'d':'<span class="muted">sin pedir</span>';}
 function loadVacOverrides(cb){if(!SB){VAC_OV={};return cb&&cb();}SB.from('vac_overrides').select('persona,futuras').then(function(r){VAC_OV={};if(!r.error&&r.data)r.data.forEach(function(x){VAC_OV[x.persona]=x.futuras;});cb&&cb();});}
 function saveVacFut(inp){var persona=inp.getAttribute('data-persona');var val=inp.value===''?null:parseFloat(inp.value);if(val!=null&&isNaN(val))return;VAC_OV[persona]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('vac_overrides').upsert({persona:persona,futuras:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'persona'}).then(function(r){inp.style.outline='2px solid '+(r.error?'var(--critico)':'var(--ok)');setTimeout(function(){inp.style.outline='';},1200);});}}
+var PS_CONSULTOR={}; // override del consultor (staff) por respuesta de Pit Stop (Supabase): respKey -> nombre
+function psEditable(){return SUPABASE_READY&&ROLE==='admin';}
+function psRespKey(r){var code=normCode(r[psCol(PS.proyecto)]);var fecha=String(r[psCol(PS.fecha)]||'').trim();var id=PS.id>=0?String(r[psCol(PS.id)]||'').trim():'';if(!id)id=String(r[psCol(PS.nombre)]||'').trim()||String(r[psCol(PS.correo)]||'').trim();return code+'|'+fecha+'|'+id;}
+function psConsultorOf(r){var k=psRespKey(r);if(PS_CONSULTOR[k]!=null&&String(PS_CONSULTOR[k]).trim()!=='')return PS_CONSULTOR[k];return String(r[psCol(PS.nombre)]||'').trim();}
+function loadPSConsultor(cb){if(!SB){PS_CONSULTOR={};return cb&&cb();}SB.from('ps_consultor').select('resp_key,consultor').then(function(r){PS_CONSULTOR={};if(!r.error&&r.data)r.data.forEach(function(x){PS_CONSULTOR[x.resp_key]=x.consultor;});cb&&cb();});}
+function savePSConsultor(inp){var key=inp.getAttribute('data-key');var val=inp.value.trim();PS_CONSULTOR[key]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('ps_consultor').upsert({resp_key:key,consultor:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'resp_key'}).then(function(r){if(r.error){inp.style.outline='2px solid var(--critico)';setTimeout(function(){inp.style.outline='';},1500);}else{refreshDDPitstop();}});}}
+function refreshDDPitstop(){var el=document.getElementById('ddsec-pitstop');if(el&&CURRENT_PROJ)el.innerHTML='<div class="section-label">📋 Pit Stop</div>'+ddPitstop(CURRENT_PROJ);}
 
 // ════════ UTILS ════════
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -395,10 +405,39 @@ function firstVisibleSheet(wb){var vis=(wb.Workbook&&wb.Workbook.Sheets)||[];for
 function detectHeaderRow(ws){var aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});for(var i=0;i<Math.min(aoa.length,15);i++){var j=(aoa[i]||[]).map(function(c){return String(c).toLowerCase();}).join(' | ');if(/nombre completo|empleado|saldo vacaci/.test(j))return i;}return 0;}
 
 // ════════ DATA ════════
+// Clasifica las columnas del Pit Stop por CONTENIDO (no por posición): numéricas (escala 1–5),
+// binarias Sí/No (señal de gestión) y descriptivas (texto libre). Robusto a otro orden/columnas del Forms real.
+function psValKind(v){var s=String(v==null?'':v).trim();if(s==='')return null;if(/^-?\d+([.,]\d+)?$/.test(s))return 'num';if(isSi(v)!==null)return 'si';return 'txt';}
+function detectPS(rows){
+  var H=Object.keys((rows&&rows[0])||{});
+  if(!H.length)return {proyecto:5,fecha:6,nombre:4,correo:3,id:0,nums:[7,8,9,10],alerts_si_good:[11,12,13,14,17],dec_si_bad:[15,16],texts:[18,19,20]};
+  var col=function(pats){var c=findCol(rows,pats);return c?H.indexOf(c):-1;};
+  var proyecto=col(['Código de proyecto','codigo de proyecto','código de programa','programa','proyecto','project']);
+  var fecha=col(['Fecha Pit Stop','fecha pit stop','fecha del pit stop','fecha']);
+  var nombre=col(['Nombre','nombre completo','name']);
+  var correo=col(['Correo','correo electrónico','email','mail']);
+  var id=H.findIndex(function(h){return h.trim().toLowerCase()==='id';});
+  var skip={};[proyecto,fecha,nombre,correo,id].forEach(function(i){if(i>=0)skip[i]=1;});
+  H.forEach(function(h,i){var s=h.trim().toLowerCase();if(s.indexOf('hora de inicio')>=0||s.indexOf('hora de finaliz')>=0||s.indexOf('última modific')>=0||s.indexOf('hora de la última')>=0)skip[i]=1;});
+  var BAD=/fin(es)? de semana|finde|burnout|riesgo|sobrecarg|trasnoch|renunci|abandon|agotad|estr[eé]s|dejar/;
+  var nums=[],good=[],bad=[],texts=[];
+  H.forEach(function(h,i){
+    if(skip[i])return;
+    var n=0,si=0,txt=0;
+    rows.forEach(function(r){var k=psValKind(r[h]);if(k==='num')n++;else if(k==='si')si++;else if(k==='txt')txt++;});
+    var tot=n+si+txt;
+    if(!tot){texts.push(i);return;}            // columna sin datos: descriptiva (no contamina numéricas/binarias)
+    if(si/tot>=0.6)(BAD.test(h.toLowerCase())?bad:good).push(i);
+    else if(n/tot>=0.6)nums.push(i);
+    else texts.push(i);
+  });
+  return {proyecto:proyecto>=0?proyecto:5,fecha:fecha>=0?fecha:6,nombre:nombre>=0?nombre:4,correo:correo,id:id,nums:nums,alerts_si_good:good,dec_si_bad:bad,texts:texts};
+}
 function setData(d){
   DATA=d;
   PCH=Object.keys((d.pc&&d.pc[0])||{});
   PSH=Object.keys((d.ps&&d.ps[0])||{});
+  PS=detectPS(d.ps);
   var rp=d.refDate?String(d.refDate).split('-'):null;
   REF=rp?new Date(+rp[0],+rp[1]-1,+rp[2]).getTime():(function(){var n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate()).getTime();})();
   d._proj={code:findCol(d.proj,['Código','codigo','code','proyecto','project','cod']),nombre:findCol(d.proj,['Nombre','nombre','persona','name']),cargo:findCol(d.proj,['Cargo','cargo'])};
@@ -585,7 +624,7 @@ function ddPulseContent(code,mode){
 }
 function ddPitstop(code){
   var groups=psGrouped(code);if(!groups.length)return '<div class="empty">Este proyecto no tiene Pit Stops registrados.</div>';
-  function whoOf(r,i){return String(r[psCol(PS.nombre)]||'').trim()||('Resp. '+(i+1));}
+  function whoOf(r,i){return psConsultorOf(r)||('Resp. '+(i+1));}
   function numCell(v){var n=parseN(v);return '<td class="num" style="color:'+scoreColor(n,'pitstop')+';font-weight:700">'+(n!=null?n:'—')+'</td>';}
   function siCell(v,mode){var s=isSi(v);if(s===null)return '<td class="num muted">—</td>';if(mode==='good')return '<td class="num">'+(s?'<span class="yes">Sí</span>':'<span class="no">No</span>')+'</td>';return '<td class="num">'+(s?'<span class="warnflag">Sí</span>':'<span class="muted">No</span>')+'</td>';}
   var h='';
@@ -605,12 +644,19 @@ function ddPitstop(code){
   var head='<th class="qcol">Pregunta</th>'+resp.map(function(r,i){return '<th class="num">'+esc(whoOf(r,i))+'</th>';}).join('');
   function grp(t){return '<tr class="grp"><td colspan="'+ncols+'">'+t+'</td></tr>';}
   function qrow(ci,mode){return '<tr><td class="qcol">'+esc(shortQ(psCol(ci)))+'</td>'+resp.map(function(r){return mode==='num'?numCell(r[psCol(ci)]):siCell(r[psCol(ci)],mode);}).join('')+'</tr>';}
-  var rows=grp('Termómetro · escala 1–5');PS.nums.forEach(function(ci){rows+=qrow(ci,'num');});
+  var rows='';
+  if(psEditable()){
+    var dlId='ps-staff-dl-'+code;var seen={},opts='';
+    (REG[code]&&REG[code].people||[]).concat(STAFF).forEach(function(p){var n=String(p.name||'').trim();if(n&&!seen[n]){seen[n]=1;opts+='<option value="'+esc(n)+'">';}});
+    h+='<datalist id="'+dlId+'">'+opts+'</datalist>';
+    rows+='<tr class="cons-row"><td class="qcol">Consultor (staff)</td>'+resp.map(function(r){return '<td class="num"><input class="ps-cons-inp" list="'+dlId+'" data-key="'+esc(psRespKey(r))+'" value="'+esc(PS_CONSULTOR[psRespKey(r)]!=null?PS_CONSULTOR[psRespKey(r)]:(r[psCol(PS.nombre)]||''))+'" placeholder="—" onchange="savePSConsultor(this)"></td>';}).join('')+'</tr>';
+  }
+  rows+=grp('Termómetro · escala 1–5');PS.nums.forEach(function(ci){rows+=qrow(ci,'num');});
   rows+=grp('Señales de gestión · Sí = bueno');PS.alerts_si_good.forEach(function(ci){rows+=qrow(ci,'good');});
   rows+=grp('Por discutir · Sí = a conversar');PS.dec_si_bad.forEach(function(ci){rows+=qrow(ci,'bad');});
-  h+='<div class="card"><div class="card-h">Detalle del último Pit Stop · '+esc(g.fecha)+' <span class="badge '+(recent?'b-ok':'b-late')+'" style="margin-left:6px">'+(recent?'reciente':'+14 días')+'</span><span class="muted" style="font-weight:400;font-size:11px;margin-left:8px">'+resp.length+' respuesta'+(resp.length!==1?'s':'')+'</span></div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  h+='<div class="card"><div class="card-h">Detalle del último Pit Stop · '+esc(g.fecha)+' <span class="badge '+(recent?'b-ok':'b-late')+'" style="margin-left:6px">'+(recent?'reciente':'+14 días')+'</span><span class="muted" style="font-weight:400;font-size:11px;margin-left:8px">'+resp.length+' respuesta'+(resp.length!==1?'s':'')+'</span></div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+(psEditable()?'<div class="card-sub" style="margin-top:6px">El "Consultor (staff)" es editable, sugiere al equipo del proyecto y se guarda para todos.</div>':'');
   var coms=[];resp.forEach(function(r,i){PS.texts.forEach(function(ci){var t=String(r[psCol(ci)]||'').trim();if(t&&t!=='-')coms.push('<b>'+esc(whoOf(r,i))+'</b> · <span class="muted">'+esc(shortQ(psCol(ci)))+'</span><br>'+esc(t));});});
-  if(coms.length)h+='<div class="collapse"><div class="collapse-h" onclick="this.parentNode.classList.toggle(\'open\')"><span class="exp-toggle">›</span> Comentarios ('+coms.length+')</div><div class="collapse-b" style="font-size:12px;line-height:1.5">'+coms.map(function(c){return '<div style="padding:6px 0;border-top:1px solid var(--line)">'+c+'</div>';}).join('')+'</div></div>';
+  if(coms.length)h+='<div class="collapse"><div class="collapse-h" onclick="this.parentNode.classList.toggle(\'open\')"><span class="exp-toggle">›</span> Respuestas descriptivas ('+coms.length+')</div><div class="collapse-b" style="font-size:12px;line-height:1.5">'+coms.map(function(c){return '<div style="padding:6px 0;border-top:1px solid var(--line)">'+c+'</div>';}).join('')+'</div></div>';
   h+='</div>';
   return h;
 }
@@ -676,7 +722,7 @@ function renderPitstop(){
   var rows=data.map(function(d){if(d.none)return '<tr><td class="namecell">'+esc(d.label)+' <span class="badge b-night">sin Pit Stop</span></td><td colspan="'+span+'" class="muted">Sin Pit Stop registrado</td></tr>';
     return '<tr><td class="namecell">'+esc(d.label)+(d.recent?'':' <span class="badge b-late">+14 días</span>')+'</td><td>'+esc(d.fecha)+'</td>'+d.avgs.map(function(v){return '<td class="num">'+scell(v,'pitstop')+'</td>';}).join('')+'<td class="num">'+scell(d.prom,'pitstop')+'</td>'+(cmp?'<td class="num">'+(d.promPrev!=null?varCell(d.prom,d.promPrev):'<span class="muted">—</span>')+'</td>':'')+'<td class="num">'+(d.no>0?'<b class="no">'+d.no+'</b>':'0')+'</td><td class="num">'+(d.bad>0?'<b class="warnflag">'+d.bad+'</b>':'0')+'</td><td class="num muted">'+d.n+'</td></tr>';}).join('');
   var leyenda=PS.nums.map(function(ci,i){return '<b>P'+(i+1)+'</b> '+esc(psConcept(shortQ(psCol(ci)))||shortQ(psCol(ci)));}).join(' · ');
-  body.innerHTML='<div class="tline">Pit Stop más reciente por proyecto, de menor a mayor promedio'+(cmp?' · <b>Var vs ant.</b> compara contra el Pit Stop anterior':'')+'. Pasa el cursor por P1–P4 para ver la pregunta completa.<br>'+leyenda+'</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  body.innerHTML='<div class="tline">Pit Stop más reciente por proyecto, de menor a mayor promedio'+(cmp?' · <b>Var vs ant.</b> compara contra el Pit Stop anterior':'')+'. Pasa el cursor por las columnas P# para ver la pregunta completa.<br>'+leyenda+'</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 
 // ════════ RENDER · PANEL TRASLADOS ════════
@@ -798,7 +844,7 @@ function onAuthed(session){
 }
 function showDenied(msg){ showScreen('login'); setLoginMsg(msg,'err'); var bar=document.getElementById('userbar'); if(bar)bar.innerHTML='<button class="ub-btn" onclick="signOut()">Salir</button>'; }
 function loadRemoteData(){
-  loadVacOverrides(function(){
+  loadVacOverrides(function(){ loadPSConsultor(function(){
   SB.from('app_data').select('payload').eq('id',1).maybeSingle().then(function(r){
     if(r.error){ showDenied('Error al cargar datos: '+r.error.message); return; }
     var payload=r.data&&r.data.payload;
@@ -806,7 +852,7 @@ function loadRemoteData(){
     else if(ROLE==='admin'){ decorateUserbar(); openUpload(); }
     else { showScreen('login'); setLoginMsg('Aún no hay datos publicados. Pídele al administrador que cargue los archivos.','ok'); var bar=document.getElementById('userbar'); if(bar)bar.innerHTML='<button class="ub-btn" onclick="signOut()">Salir</button>'; }
   });
-  });
+  }); });
 }
 function publishData(){
   if(!SB){ enterReal(); return; }
