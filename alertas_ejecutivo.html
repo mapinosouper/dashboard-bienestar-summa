@@ -285,8 +285,8 @@ a{color:inherit}
     <div id="r-transversal"></div>
     <div class="legend">
       <h3>Cómo leer este panel</h3>
-      <div class="legend-item"><span class="dot" style="background:var(--critico)"></span><div><b>Crítico</b> — ≥2 señales de riesgo o ≥2 personas afectadas. Actuar ahora.</div></div>
-      <div class="legend-item"><span class="dot" style="background:var(--vigilar)"></span><div><b>Vigilar</b> — una señal aislada, tendencia a la baja o acumulación (vacaciones &gt;15).</div></div>
+      <div class="legend-item"><span class="dot" style="background:var(--critico)"></span><div><b>Crítico</b> — al menos una señal de riesgo. Actuar ahora.</div></div>
+      <div class="legend-item"><span class="dot" style="background:var(--vigilar)"></span><div><b>Vigilar</b> — una señal aislada, tendencia a la baja o acumulación.</div></div>
       <div class="legend-item"><span class="dot" style="background:var(--ceguera)"></span><div><b>Punto ciego</b> — no hay dato reciente para verlo (sin Pit Stop en +14 días). Una ceguera, no un problema… todavía.</div></div>
       <div class="legend-item"><span class="dot" style="background:var(--ok)"></span><div><b>Sin alertas</b> — proyectos sanos, colapsados para no competir por tu atención.</div></div>
       <div class="legend-item" style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px">💡 <div>Clic en un proyecto para ver sus alertas; o <b>"Ver proyecto completo"</b> para el deep-dive con todas las respuestas.</div></div>
@@ -479,7 +479,7 @@ function trRowsOf(code){var k=DATA._tr.programa;return DATA.tr.filter(function(r
 function trEnriched(rows){var t=DATA._tr;return rows.map(function(r){var d=parseTRDate(r[t.fecha]);return{name:canonName((r[t.nombre]||'')+' '+(r[t.apellido]||'')),date:d,wk:d?weekKey(d):null,h:parseTimeHour(r[t.hora]),hora:String(r[t.hora]||'')};});}
 function trPeriodKey(d,group){if(!d)return null;if(group==='mes')return d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1);return weekKey(d);}
 function vacRowByName(name){var k=DATA._vac.nombre;return DATA.vac.filter(function(r){return nameMatch(String(r[k]||''),name);})[0]||null;}
-function vacSaldo(r){var v=DATA._vac;return Math.round(((parseN(r[v.salL])||0)+(parseN(r[v.salA])||0))*10)/10;}
+function vacSaldo(r){var v=DATA._vac;return Math.round((parseN(r[v.salL])||0)*10)/10;} // saldo = columna C (saldo legal a futuro)
 function vacFuturas(r){var v=DATA._vac;return Math.round(((parseN(r[v.futL])||0)+(parseN(r[v.futA])||0))*10)/10;}
 
 // ════════ DETECTORES ════════
@@ -489,10 +489,10 @@ function detectPulse(code,out){
   var rc=pcRows(code,cur),rp=prev?pcRows(code,prev):[];if(!rc.length)return;
   var ac=[],ap=[];for(var qi=0;qi<7;qi++){var col=pcCol(PC_IDX.q0+qi);ac.push(numAvg(rc,col));ap.push(rp.length?numAvg(rp,col):null);}
   var dC=ac[1],wC=ac[6],dP=ap[1],wP=ap[6];
-  var comboBaja=(dP!=null&&wP!=null&&dC<dP&&wC<wP),comboLow=(dC!=null&&wC!=null&&dC<5&&wC<5);
-  if(comboBaja||comboLow)out.push({src:'pulse',sev:'critico',title:'Desafío y Equilibrio vida/trabajo cayeron juntos',detail:'Desafío '+fmt(dC)+(dP!=null?' (antes '+fmt(dP)+')':'')+'  ·  WLB '+fmt(wC)+(wP!=null?' (antes '+fmt(wP)+')':'')+'  ·  '+cur,people:[],temporal:comboBaja?'nuevo':'persistente'});
+  var comboBaja=(dP!=null&&wP!=null&&dC<dP&&wC<wP),comboLow=(dC!=null&&wC!=null&&dC<7&&wC<7);
+  if(comboBaja||comboLow)out.push({src:'pulse',sev:'critico',title:'Desafío y Equilibrio vida/trabajo '+(comboBaja?'cayeron juntos':'ambos bajo 7'),detail:'Desafío '+fmt(dC)+(dP!=null?' (antes '+fmt(dP)+')':'')+'  ·  WLB '+fmt(wC)+(wP!=null?' (antes '+fmt(wP)+')':'')+'  ·  '+cur,people:[],temporal:comboBaja?'nuevo':'persistente'});
   for(var qi=0;qi<7;qi++){if((qi===1||qi===6)&&(comboBaja||comboLow))continue;if(ac[qi]!=null&&ap[qi]!=null&&ac[qi]<ap[qi]){var d=Math.round((ap[qi]-ac[qi])*10)/10;out.push({src:'pulse',sev:'vigilar',title:PC_Q_SHORT[qi]+' bajó '+fmt(d)+' pts',detail:fmt(ap[qi])+' → '+fmt(ac[qi])+'  ·  '+prev+' vs '+cur,people:[],temporal:'nuevo'});}}
-  for(var qi=0;qi<7;qi++){var col=pcCol(PC_IDX.q0+qi);var n=rc.filter(function(r){var v=parseN(r[col]);return v!=null&&v<4;}).length;if(n>0)out.push({src:'pulse',sev:'critico',title:n+' respuesta'+(n>1?'s':'')+' bajo 4 en '+PC_Q_SHORT[qi],detail:'Mes '+cur+'  ·  Pulse Check es anónimo',people:[],temporal:'nuevo'});}
+  for(var qi=0;qi<7;qi++){if(qi===5)continue;var col=pcCol(PC_IDX.q0+qi);var n=rc.filter(function(r){var v=parseN(r[col]);return v!=null&&v<4;}).length;if(n>0)out.push({src:'pulse',sev:'critico',title:n+' respuesta'+(n>1?'s':'')+' bajo 4 en '+PC_Q_SHORT[qi],detail:'Mes '+cur+'  ·  Pulse Check es anónimo',people:[],temporal:'nuevo'});}
 }
 function detectPitstop(code,out){
   if(NO_PITSTOP[code])return; // OTB u otros sin Pit Stop: no marcar punto ciego
@@ -501,21 +501,37 @@ function detectPitstop(code,out){
   var recent=lw&&(REF-lw.ts)>=0&&(REF-lw.ts)<=14*864e5;
   if(!recent){var days=lw?Math.round((REF-lw.ts)/864e5):null;out.push({src:'pitstop',sev:'ceguera',title:lw?'Sin Pit Stop hace '+days+' días':'Nunca registró Pit Stop',detail:lw?'Último registro: '+shortDate(new Date(lw.ts)):'Sin registros',people:[],temporal:null});return;}
   var last=lw.rows,fecha=shortDate(new Date(lw.ts));
-  PS.nums.forEach(function(ci){var col=psCol(ci);var a=numAvg(last,col);if(a!=null&&a<3.5)out.push({src:'pitstop',sev:'critico',title:'"'+shortQ(col)+'" en '+fmt(a)+'/5',detail:'Promedio del último Pit Stop bajo 3,5  ·  '+fecha,people:[],temporal:null});});
-  PS.alerts_si_good.forEach(function(ci){var col=psCol(ci);var no=last.filter(function(r){return isSi(r[col])===false;}).map(function(r){return String(r[psCol(PS.nombre)]||'').trim();}).filter(Boolean);if(no.length)out.push({src:'pitstop',sev:'critico',title:no.length+' "No" en "'+shortQ(col)+'"',detail:'Último Pit Stop  ·  '+fecha,people:no,temporal:null});});
+  PS.nums.forEach(function(ci){var col=psCol(ci);var a=numAvg(last,col);var low=last.filter(function(r){var v=parseN(r[col]);return v!=null&&v<3;}).length;if(a!=null&&a<3.5)out.push({src:'pitstop',sev:'critico',title:'"'+shortQ(col)+'" en '+fmt(a)+'/5',detail:'Promedio del último Pit Stop bajo 3,5  ·  '+fecha,people:[],temporal:null});else if(low>0)out.push({src:'pitstop',sev:'critico',title:low+' nota'+(low>1?'s':'')+' bajo 3 en "'+shortQ(col)+'"',detail:'Último Pit Stop  ·  '+fecha,people:[],temporal:null});});
+  PS.alerts_si_good.forEach(function(ci){var col=psCol(ci);var noRows=last.filter(function(r){return isSi(r[col])===false;});var n=noRows.length;if(!n)return;var people=noRows.map(function(r){return String(r[psCol(PS.nombre)]||'').trim();}).filter(Boolean);out.push({src:'pitstop',sev:n>=2?'critico':'vigilar',title:n+' "No" en "'+shortQ(col)+'"',detail:'Último Pit Stop  ·  '+fecha,people:people,temporal:null});});
+  (PS.dec_si_bad||[]).forEach(function(ci){var col=psCol(ci);var siRows=last.filter(function(r){return isSi(r[col])===true;});var n=siRows.length;if(!n)return;var people=siRows.map(function(r){return String(r[psCol(PS.nombre)]||'').trim();}).filter(Boolean);out.push({src:'pitstop',sev:n>=2?'critico':'vigilar',title:n+' "Sí" en "'+shortQ(col)+'"',detail:'Último Pit Stop  ·  '+fecha,people:people,temporal:null});});
 }
+// Traslados por CAMBIO DE CONDUCTA: cada persona se compara con su propia línea base (promedio móvil de
+// sus 4 semanas propias previas). "Tarde" = llegada ≥21:00 (incluye trasnoche post-00:00). Δ = semana actual − base.
+// Δ≥2 → crítico · Δ≥1 → vigilar. Sin semanas previas propias → no se evalúa (no hay con qué medir el cambio).
 function detectTraslados(code,out){
   var en=trEnriched(trRowsOf(code)).filter(function(x){return x.wk;});if(!en.length)return;
-  var weeks=uniq(en.map(function(x){return x.wk;})).sort();var latest=weeks[weeks.length-1],prevW=weeks.length>=2?weeks[weeks.length-2]:null;
-  var cur=en.filter(function(x){return x.wk===latest;}),prv=prevW?en.filter(function(x){return x.wk===prevW;}):[];
-  var night=cur.filter(function(x){return x.h!=null&&x.h>=0&&x.h<6;}),late=cur.filter(function(x){return x.h!=null&&x.h>=21&&x.h<24;});
-  var nightP=prv.filter(function(x){return x.h!=null&&x.h>=0&&x.h<6;}).length,lateP=prv.filter(function(x){return x.h!=null&&x.h>=21&&x.h<24;}).length;
-  if(night.length)out.push({src:'traslados',sev:'critico',title:night.length+' trasnoche'+(night.length>1?'s':'')+' (llegada post 00:00)',detail:'Semana más reciente',people:uniq(night.map(function(x){return x.name;})),temporal:nightP>0?'persistente':'nuevo'});
-  if(late.length)out.push({src:'traslados',sev:'vigilar',title:late.length+' llegada'+(late.length>1?'s':'')+' tardía'+(late.length>1?'s':'')+' (21:00–00:00)',detail:'Semana más reciente',people:uniq(late.map(function(x){return x.name;})),temporal:lateP>0?'persistente':'nuevo'});
+  var weeks=uniq(en.map(function(x){return x.wk;})).sort();var latest=weeks[weeks.length-1];
+  function isLate(h){return h!=null&&((h>=21&&h<24)||(h>=0&&h<6));}
+  var people={};
+  en.forEach(function(x){if(!x.name)return;var p=people[x.name]=people[x.name]||{};p[x.wk]=(p[x.wk]||0)+(isLate(x.h)?1:0);});
+  var crit=[],vig=[];
+  Object.keys(people).forEach(function(name){
+    var p=people[name];if(!(latest in p))return; // no viajó la semana actual
+    var prior=weeks.filter(function(w){return w<latest&&(w in p);}).slice(-4);
+    if(!prior.length)return; // sin historial propio: no se puede medir cambio
+    var base=prior.reduce(function(s,w){return s+p[w];},0)/prior.length;
+    var delta=p[latest]-base,tag=name+' ('+p[latest]+' vs '+fmt(Math.round(base*10)/10)+')';
+    if(delta>=2)crit.push({name:name,tag:tag});else if(delta>=1)vig.push({name:name,tag:tag});
+  });
+  if(crit.length)out.push({src:'traslados',sev:'critico',title:crit.length+' persona'+(crit.length>1?'s':'')+' con alza fuerte de llegadas tarde',detail:'Semana más reciente vs su promedio de 4 semanas  ·  '+crit.map(function(x){return x.tag;}).join('  ·  '),people:crit.map(function(x){return x.name;}),temporal:'nuevo'});
+  if(vig.length)out.push({src:'traslados',sev:'vigilar',title:vig.length+' persona'+(vig.length>1?'s':'')+' empezando a llegar más tarde',detail:'Semana más reciente vs su promedio de 4 semanas  ·  '+vig.map(function(x){return x.tag;}).join('  ·  '),people:vig.map(function(x){return x.name;}),temporal:'nuevo'});
 }
-function detectVacGlobal(){var byProj={},transversal=[];var k=DATA._vac.nombre;DATA.vac.forEach(function(r){var name=String(r[k]||'').trim();if(!name)return;var saldo=vacSaldo(r);if(saldo<=15)return;var codes=personCodes(name);var cn=canonName(name);if(codes.length===1)(byProj[codes[0]]=byProj[codes[0]]||[]).push({name:cn,saldo:saldo});else transversal.push({name:cn,saldo:saldo});});return{byProj:byProj,transversal:transversal};}
+// Vacaciones = indicador de PERSONAS, no de proyecto: no se vincula a ningún código ni afecta el color de los proyectos.
+// Lista plana de quienes tienen saldo > 15 días, con el nombre homologado al staffing (canonName).
+function detectVacGlobal(){var list=[];var v=DATA._vac,k=v.nombre;DATA.vac.forEach(function(r){var name=String(r[k]||'').trim();if(!name)return;var saldo=Math.round((parseN(r[v.salL])||0)*10)/10;if(saldo<=15)return;list.push({name:canonName(name),saldo:saldo});});list.sort(function(a,b){return b.saldo-a.saldo;});return list;}
 
-function tierOf(a){var crit=a.filter(function(x){return x.sev==='critico';});var cp={};crit.forEach(function(x){(x.people||[]).forEach(function(p){cp[p]=1;});});if(crit.length>=2||Object.keys(cp).length>=2)return'critico';if(crit.length>=1||a.some(function(x){return x.sev==='vigilar';}))return'vigilar';if(a.some(function(x){return x.sev==='ceguera';}))return'ceguera';return'ok';}
+// Una sola señal crítica ya pinta el proyecto de Crítico.
+function tierOf(a){if(a.some(function(x){return x.sev==='critico';}))return'critico';if(a.some(function(x){return x.sev==='vigilar';}))return'vigilar';if(a.some(function(x){return x.sev==='ceguera';}))return'ceguera';return'ok';}
 function scoreOf(a){var w={critico:3,vigilar:1,ceguera:1};return a.reduce(function(s,x){return s+(w[x.sev]||0);},0);}
 function affectedOf(a){var s={};a.forEach(function(x){(x.people||[]).forEach(function(p){s[p]=1;});});return Object.keys(s).length;}
 
@@ -527,11 +543,10 @@ function buildModel(){
   REG=buildRegistry();PP=personProjects(REG);STAFF=Object.keys(PP).map(function(n){return{name:n,tokens:nameTokens(n),codes:PP[n]};});var vac=detectVacGlobal();
   var projects=Object.keys(REG).map(function(code){
     var a=[];detectPulse(code,a);detectPitstop(code,a);detectTraslados(code,a);
-    var vp=vac.byProj[code];if(vp&&vp.length)a.push({src:'vacaciones',sev:'vigilar',title:vp.length+' persona'+(vp.length>1?'s':'')+' con saldo > 15 días',detail:vp.map(function(x){return x.name+' ('+x.saldo+'d)';}).join('  ·  '),people:vp.map(function(x){return x.name;}),temporal:null});
     return{code:code,label:REG[code].label,team:REG[code].people,alerts:a,tier:tierOf(a),score:scoreOf(a),affected:affectedOf(a)};
   });
   projects.sort(function(a,b){if(SEV[a.tier].rank!==SEV[b.tier].rank)return SEV[a.tier].rank-SEV[b.tier].rank;if(b.score!==a.score)return b.score-a.score;return b.affected-a.affected;});
-  MODEL={projects:projects,transversal:vac.transversal,byCode:{}};
+  MODEL={projects:projects,vacaciones:vac,byCode:{}};
   projects.forEach(function(p){MODEL.byCode[p.code]=p;});
 }
 
@@ -569,7 +584,7 @@ function renderResumen(){
   var data=MODEL,counts={critico:0,vigilar:0,ceguera:0,ok:0};data.projects.forEach(function(p){counts[p.tier]++;});
   var lastMes=pcMonths().slice(-1)[0]||'';
   document.getElementById('r-sub').textContent='Ordenado por urgencia · referencia '+new Date(REF).toLocaleDateString('es-CL',{day:'2-digit',month:'long',year:'numeric'})+(lastMes?'  ·  Pulse: '+lastMes:'')+(staffingLoadedAt()?'  ·  Staffing: '+fmtStaffDate(staffingLoadedAt()):'');
-  var strip=[{k:'critico',dsc:'≥2 señales o personas'},{k:'vigilar',dsc:'Tendencia / acumulación'},{k:'ceguera',dsc:'Sin dato reciente'},{k:'ok',dsc:'Proyectos sanos'}];
+  var strip=[{k:'critico',dsc:'Al menos una señal'},{k:'vigilar',dsc:'Tendencia / acumulación'},{k:'ceguera',dsc:'Sin dato reciente'},{k:'ok',dsc:'Proyectos sanos'}];
   document.getElementById('r-triage').innerHTML=strip.map(function(s){return '<div class="tr-pill s-'+s.k+'"><div class="tr-num">'+counts[s.k]+'</div><div class="tr-lbl">'+SEV[s.k].label+'</div><div class="tr-dsc">'+s.dsc+'</div></div>';}).join('');
   var only=document.getElementById('only-alerts').checked;
   var withA=data.projects.filter(function(p){return p.tier!=='ok';}),ok=data.projects.filter(function(p){return p.tier==='ok';});
@@ -583,7 +598,8 @@ function renderResumen(){
   }
   document.getElementById('r-list').innerHTML=html;
   var tv=document.getElementById('r-transversal');
-  tv.innerHTML=data.transversal.length?('<div class="section-label">Transversal · sin proyecto único</div><div class="pcard s-vigilar"><div class="phead" style="cursor:default"><span class="dot"></span><div class="pmain"><div class="ptitle-row"><span class="pname">Vacaciones — fuera de proyecto</span><span class="tier-tag s-vigilar">Vigilar</span></div><div class="pheadline">'+data.transversal.map(function(x){return '<b>'+esc(x.name)+'</b> ('+x.saldo+'d)';}).join(' · ')+' con saldo &gt; 15 días</div></div></div></div>'):'';
+  var vl=data.vacaciones||[];
+  tv.innerHTML=vl.length?('<div class="section-label">🏖️ Vacaciones · saldo &gt; 15 días</div><div class="pcard" style="border-left-color:var(--line)"><div class="phead" style="cursor:default"><span class="dot" style="background:var(--muted)"></span><div class="pmain"><div class="ptitle-row"><span class="pname">Personas con saldo alto</span><span class="muted" style="font-size:11px">Indicador de personas · no afecta el estado de los proyectos</span></div><div class="pheadline">'+vl.map(function(x){return '<b>'+esc(x.name)+'</b> ('+fmt(x.saldo)+'d)';}).join(' · ')+'</div></div></div></div>'):'';
 }
 function cardHTML(p){
   var by=srcSummary(p.alerts),chips='';SRC_ORDER.forEach(function(s){if(by[s])chips+='<span class="chip c-'+by[s].sev+'">'+SRC[s].ico+' '+by[s].n+'</span>';});
@@ -693,10 +709,10 @@ function ddTraslados(code){
 function ddVac(code){
   var team=REG[code].people;if(!team.length)return '<div class="empty">Sin equipo.</div>';
   var v=DATA._vac;
-  var rows=team.map(function(t){var r=vacRowByName(t.name);if(!r)return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td colspan="4" class="muted">sin registro</td></tr>';
-    var sl=parseN(r[v.salL])||0,sa=parseN(r[v.salA])||0,saldo=vacSaldo(r),fut=vacFut(r,t.name);
-    return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td class="num">'+fmt(sl)+'</td><td class="num">'+fmt(sa)+'</td><td class="num"><b>'+fmt(saldo)+'d</b></td><td class="num">'+vacFutCell(canonName(t.name),fut)+'</td></tr>';}).join('');
-  return '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th><th>Cargo</th><th class="num">Saldo legal</th><th class="num">Saldo admin</th><th class="num">Saldo total</th><th class="num">Futuras</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(vacEditable()?'<div class="card-sub" style="margin-top:6px">Las "Futuras" son editables y se guardan para todo el equipo.</div>':'')+'</div>';
+  var rows=team.map(function(t){var r=vacRowByName(t.name);if(!r)return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td colspan="2" class="muted">sin registro</td></tr>';
+    var saldo=vacSaldo(r),fut=vacFut(r,t.name);
+    return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td class="num"><b>'+fmt(saldo)+'d</b></td><td class="num">'+vacFutCell(canonName(t.name),fut)+'</td></tr>';}).join('');
+  return '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th><th>Cargo</th><th class="num">Saldo</th><th class="num">Futuras</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(vacEditable()?'<div class="card-sub" style="margin-top:6px">Las "Futuras" son editables y se guardan para todo el equipo.</div>':'')+'</div>';
 }
 
 // ════════ RENDER · PANEL PULSE ════════
@@ -807,7 +823,7 @@ function renderVacaciones(){
   var high=data.filter(function(x){return x.saldo>15;}).length;var prom=data.length?Math.round(data.reduce(function(s,x){return s+x.saldo;},0)/data.length*10)/10:0;
   var kpis='<div class="kpis"><div class="kpi alert"><div class="v">'+high+'</div><div class="l">Saldo &gt; 15 días</div></div><div class="kpi"><div class="v">'+data.length+'</div><div class="l">Personas</div></div><div class="kpi"><div class="v">'+prom+'d</div><div class="l">Saldo promedio</div></div></div>';
   var rows=data.map(function(d){return '<tr><td class="namecell">'+esc(d.name)+'</td><td class="cargo">'+esc(d.cargo)+'</td><td>'+esc(d.proj)+'</td><td class="num"><b>'+fmt(d.saldo)+'d</b></td><td class="num">'+vacFutCell(d.name,d.fut)+'</td></tr>';}).join('');
-  body.innerHTML=kpis+'<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th><th>Cargo</th><th>Proyecto(s)</th><th class="num">Saldo total</th><th class="num">Futuras pedidas</th></tr></thead><tbody>'+rows+'</tbody></table></div></div><div class="tline">"Sin pedir" no es alerta por sí sola; solo se informa.'+(vacEditable()?' · Las futuras son editables y se guardan para todo el equipo.':'')+'</div>';
+  body.innerHTML=kpis+'<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th><th>Cargo</th><th>Proyecto(s)</th><th class="num">Saldo</th><th class="num">Futuras pedidas</th></tr></thead><tbody>'+rows+'</tbody></table></div></div><div class="tline">"Sin pedir" no es alerta por sí sola; solo se informa.'+(vacEditable()?' · Las futuras son editables y se guardan para todo el equipo.':'')+'</div>';
 }
 
 // ════════ CARGA DE DATOS (upload) ════════
