@@ -439,9 +439,30 @@ function detectPS(rows){
   });
   return {proyecto:proyecto>=0?proyecto:5,fecha:fecha>=0?fecha:6,nombre:nombre>=0?nombre:4,correo:correo,id:id,nums:nums,alerts_si_good:good,dec_si_bad:bad,texts:texts};
 }
+// Pulse: resuelve el índice de cada columna por NOMBRE (no por posición fija). Necesario porque al
+// releer desde Supabase (jsonb) el orden de las claves no se conserva y el mapeo posicional se rompe.
+function detectPCH(rows){
+  var H=Object.keys((rows&&rows[0])||{});if(!H.length)return H;
+  var arr=H.slice();
+  var set=function(i,pats){var c=findCol(rows,pats);if(c)arr[i]=c;};
+  set(0,['Id']);
+  set(1,['Hora de inicio']);
+  set(4,['Nombre']);                                  // el mes viene en la columna "Nombre"
+  set(5,['disfrut']);                                 // q0 Disfrute
+  set(6,['desafí','desafio','desafiad']);             // q1 Desafío
+  set(7,['feedback']);                                // q2 Feedback
+  set(8,['confianza']);                               // q3 Confianza
+  set(9,['reconocimiento de','líderes','lideres']);   // q4 Reconocimiento de líderes
+  set(10,['a gusto con tu rol','tu rol']);            // q5 Rol
+  set(11,['equilibr']);                               // q6 Equilibrio
+  set(13,['nombre de tu proyecto','tu proyecto','proyecto']); // proyecto
+  set(14,['reconocerías','reconocerias','alguien este mes']); // reconocer a un compañero
+  set(16,['cuál es tu cargo','tu cargo','cargo']);    // cargo
+  return arr;
+}
 function setData(d){
   DATA=d;
-  PCH=Object.keys((d.pc&&d.pc[0])||{});
+  PCH=detectPCH(d.pc);
   PSH=Object.keys((d.ps&&d.ps[0])||{});
   PS=detectPS(d.ps);
   var rp=d.refDate?String(d.refDate).split('-'):null;
@@ -695,24 +716,38 @@ function ddPitstop(code){
   return h;
 }
 function initials(s){return s.split(/\s+/).map(function(w){return w[0]||'';}).join('').toUpperCase().slice(0,3);}
+// Traslados del proyecto AGRUPADOS POR PERSONA: resumen de trasnoches/tardíos por persona,
+// y un desplegable (chevron) para ver el detalle de sus viajes. Ordenado por más trasnoches primero.
 function ddTraslados(code){
   var en=trEnriched(trRowsOf(code));if(!en.length)return '<div class="empty">Sin viajes registrados para este proyecto.</div>';
-  en.sort(function(a,b){return(b.date||0)-(a.date||0);});
-  function rowOf(x){var badge=x.h!=null&&x.h<6?'<span class="badge b-night">Trasnoche</span>':x.h!=null&&x.h>=21&&x.h<24?'<span class="badge b-late">Tardío</span>':'<span class="badge b-ok">OK</span>';return '<tr><td class="namecell">'+esc(x.name)+'</td><td>'+(x.date?x.date.toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'2-digit'}):'—')+'</td><td>'+esc(x.hora)+'</td><td>'+badge+'</td></tr>';}
-  var marcados=en.filter(function(x){return x.h!=null&&(x.h<6||x.h>=21);}),ok=en.filter(function(x){return !(x.h!=null&&(x.h<6||x.h>=21));});
-  var head='<thead><tr><th>Persona</th><th>Fecha llegada</th><th>Hora</th><th>Clasificación</th></tr></thead>';
-  var h='<div class="card">';
-  h+=marcados.length?'<div class="dtable-wrap"><table class="dtable">'+head+'<tbody>'+marcados.map(rowOf).join('')+'</tbody></table></div>':'<div class="muted" style="font-size:12.5px;padding:4px 0">✅ Sin tardíos ni trasnoches en este proyecto.</div>';
-  if(ok.length)h+='<div class="collapse"><div class="collapse-h" onclick="this.parentNode.classList.toggle(\'open\')"><span class="exp-toggle">›</span> Viajes OK ('+ok.length+')</div><div class="collapse-b"><div class="dtable-wrap"><table class="dtable">'+head+'<tbody>'+ok.map(rowOf).join('')+'</tbody></table></div></div></div>';
-  return h+'</div>';
+  var byP={};en.forEach(function(x){var n=x.name||'—';(byP[n]=byP[n]||[]).push(x);});
+  var people=Object.keys(byP).map(function(n){
+    var trips=byP[n].slice().sort(function(a,b){return(b.date||0)-(a.date||0);});
+    var night=trips.filter(function(x){return x.h!=null&&x.h>=0&&x.h<6;}).length;
+    var late=trips.filter(function(x){return x.h!=null&&x.h>=21&&x.h<24;}).length;
+    return {name:n,trips:trips,night:night,late:late,total:trips.length};
+  });
+  people.sort(function(a,b){return b.night-a.night||b.late-a.late||b.total-a.total;});
+  function tripRow(x){var badge=x.h!=null&&x.h<6?'<span class="badge b-night">Trasnoche</span>':x.h!=null&&x.h>=21&&x.h<24?'<span class="badge b-late">Tardío</span>':'<span class="badge b-ok">OK</span>';return '<tr><td>'+(x.date?x.date.toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'2-digit'}):'—')+'</td><td>'+esc(x.hora)+'</td><td>'+badge+'</td></tr>';}
+  function personBlock(p){
+    var chips='';
+    if(p.night>0)chips+=' <span class="badge b-night">'+p.night+' trasnoche'+(p.night>1?'s':'')+'</span>';
+    if(p.late>0)chips+=' <span class="badge b-late">'+p.late+' tardío'+(p.late>1?'s':'')+'</span>';
+    if(!p.night&&!p.late)chips+=' <span class="badge b-ok">sin tardíos ni trasnoches</span>';
+    var flagged=p.trips.filter(function(x){return x.h!=null&&(x.h<6||x.h>=21);}); // solo tardíos y trasnoches
+    var thead='<thead><tr><th>Fecha llegada</th><th>Hora</th><th>Clasificación</th></tr></thead>';
+    var body=flagged.length?'<div class="dtable-wrap"><table class="dtable">'+thead+'<tbody>'+flagged.map(tripRow).join('')+'</tbody></table></div>':'<div class="muted" style="font-size:12px;padding:2px 0">Sin viajes tardíos ni trasnoches.</div>';
+    return '<div class="collapse"><div class="collapse-h" onclick="this.parentNode.classList.toggle(\'open\')"><span class="exp-toggle">›</span> <b>'+esc(p.name)+'</b>'+chips+' <span class="muted" style="font-weight:400;font-size:11px">· '+p.total+' viaje'+(p.total>1?'s':'')+'</span></div><div class="collapse-b">'+body+'</div></div>';
+  }
+  return '<div class="card">'+people.map(personBlock).join('')+'</div>';
 }
 function ddVac(code){
   var team=REG[code].people;if(!team.length)return '<div class="empty">Sin equipo.</div>';
   var v=DATA._vac;
-  var rows=team.map(function(t){var r=vacRowByName(t.name);if(!r)return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td colspan="2" class="muted">sin registro</td></tr>';
-    var saldo=vacSaldo(r),fut=vacFut(r,t.name);
-    return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td class="num"><b>'+fmt(saldo)+'d</b></td><td class="num">'+vacFutCell(canonName(t.name),fut)+'</td></tr>';}).join('');
-  return '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th><th>Cargo</th><th class="num">Saldo</th><th class="num">Futuras</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(vacEditable()?'<div class="card-sub" style="margin-top:6px">Las "Futuras" son editables y se guardan para todo el equipo.</div>':'')+'</div>';
+  var rows=team.map(function(t){var r=vacRowByName(t.name);if(!r)return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td colspan="5" class="muted">sin registro</td></tr>';
+    var legal=Math.round((parseN(r[v.salL])||0)*10)/10,admin=Math.round((parseN(r[v.salA])||0)*10)/10,total=Math.round((legal+admin)*10)/10,fut=vacFut(r,t.name),futuro=Math.round((total-(fut!=null?fut:0))*10)/10;
+    return '<tr><td class="namecell">'+esc(t.name)+'</td><td class="cargo">'+esc(t.cargo)+'</td><td class="num">'+fmt(legal)+'</td><td class="num">'+fmt(admin)+'</td><td class="num"><b>'+fmt(total)+'d</b></td><td class="num">'+vacFutCell(canonName(t.name),fut)+'</td><td class="num">'+fmt(futuro)+'d</td></tr>';}).join('');
+  return '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th><th>Cargo</th><th class="num">Legal</th><th class="num">Admin.</th><th class="num">Total</th><th class="num">Pedidas</th><th class="num">Saldo futuro</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="card-sub" style="margin-top:6px">Total = Legal + Administrativo · Saldo futuro = Total − Pedidas'+(vacEditable()?' · "Pedidas" es editable (se recalcula al recargar)':'')+'.</div></div>';
 }
 
 // ════════ RENDER · PANEL PULSE ════════
