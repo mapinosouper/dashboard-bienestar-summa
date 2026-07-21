@@ -353,6 +353,7 @@ var SUPABASE_URL='https://dmphptxhnfnhvwcyfluy.supabase.co';      // p.ej. https
 var SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtcGhwdHhobmZuaHZ3Y3lmbHV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMTI3MDAsImV4cCI6MjA5NjU4ODcwMH0.sKGhIzR2Jj3eB0lvxECj4dTagmlhgxJstJO558FhhWQ';    // anon public key (NO el service_role)
 var SUPABASE_READY=/^https?:\/\//.test(SUPABASE_URL)&&SUPABASE_ANON_KEY.length>20;
 var SB=null,ROLE=null,CURRENT_EMAIL=null,AUTHED=false;
+var NAME_EDITOR='apino@summapartners.com'; // único correo autorizado a rellenar/guardar nombres en Pulse
 var VAC_OV={}; // overrides de "futuras pedidas" por persona (Supabase)
 function vacEditable(){return SUPABASE_READY&&ROLE==='admin';}
 function vacFut(r,name){var k=canonName(name);return VAC_OV[k]!=null?VAC_OV[k]:vacFuturas(r);}
@@ -360,12 +361,12 @@ function vacFutCell(key,fut){if(vacEditable())return '<input type="number" step=
 function loadVacOverrides(cb){if(!SB){VAC_OV={};return cb&&cb();}SB.from('vac_overrides').select('persona,futuras').then(function(r){VAC_OV={};if(!r.error&&r.data)r.data.forEach(function(x){VAC_OV[x.persona]=x.futuras;});cb&&cb();});}
 function saveVacFut(inp){var persona=inp.getAttribute('data-persona');var val=inp.value===''?null:parseFloat(inp.value);if(val!=null&&isNaN(val))return;VAC_OV[persona]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('vac_overrides').upsert({persona:persona,futuras:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'persona'}).then(function(r){inp.style.outline='2px solid '+(r.error?'var(--critico)':'var(--ok)');setTimeout(function(){inp.style.outline='';},1200);});}}
 var PS_CONSULTOR={}; // consultor (staff) asignado por respuesta (Supabase, tabla ps_consultor): respKey -> nombre. Claves Pit Stop: CODE|fecha|id · claves Pulse: "pulse|CODE|id"
-function psEditable(){return SUPABASE_READY&&ROLE==='admin';}
+function psEditable(){return SUPABASE_READY&&CURRENT_EMAIL===NAME_EDITOR;}
 function psRespKey(r){var code=normCode(r[psCol(PS.proyecto)]);var fecha=String(r[psCol(PS.fecha)]||'').trim();var id=PS.id>=0?String(r[psCol(PS.id)]||'').trim():'';if(!id)id=String(r[psCol(PS.nombre)]||'').trim()||String(r[psCol(PS.correo)]||'').trim();return code+'|'+fecha+'|'+id;}
 function psConsultorOf(r){var k=psRespKey(r);if(PS_CONSULTOR[k]!=null&&String(PS_CONSULTOR[k]).trim()!=='')return PS_CONSULTOR[k];return String(r[psCol(PS.nombre)]||'').trim();}
 function loadPSConsultor(cb){if(!SB){PS_CONSULTOR={};return cb&&cb();}SB.from('ps_consultor').select('resp_key,consultor').then(function(r){PS_CONSULTOR={};if(!r.error&&r.data)r.data.forEach(function(x){PS_CONSULTOR[x.resp_key]=x.consultor;});cb&&cb();});}
 function pcRespKey(r,code,fb){var id=String(r[pcCol(0)]||'').trim();return 'pulse|'+code+'|'+(id||fb);} // id = columna "Id" del Forms; fallback mes#fila si viene vacía
-function savePCConsultor(inp){var key=inp.getAttribute('data-key');var val=inp.value.trim();PS_CONSULTOR[key]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('ps_consultor').upsert({resp_key:key,consultor:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'resp_key'}).then(function(r){if(r.error){inp.style.outline='2px solid var(--critico)';setTimeout(function(){inp.style.outline='';},1500);}else{refreshDDPulse();}});}}
+function savePCConsultor(inp){var key=inp.getAttribute('data-key');var val=inp.value.trim();PS_CONSULTOR[key]=val;if(SB&&CURRENT_EMAIL===NAME_EDITOR){inp.style.outline='2px solid var(--vigilar)';SB.from('ps_consultor').upsert({resp_key:key,consultor:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'resp_key'}).then(function(r){if(r.error){inp.style.outline='2px solid var(--critico)';setTimeout(function(){inp.style.outline='';},1500);}else{refreshDDPulse();}});}}
 function refreshDDPulse(){var b=document.getElementById('dd-pulse-body');if(b&&CURRENT_PROJ)b.innerHTML=ddPulseContent(CURRENT_PROJ,DD_PULSE);}
 
 // ════════ UTILS ════════
@@ -780,16 +781,22 @@ function renderPulse(){
   for(var qi=0;qi<7;qi++){(function(qi){t2rows+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+projs.map(function(p){return inlineCell(p.avgs[qi],p.prevAvgs[qi]);}).join('')+inlineCell(numAvg(all,col(qi)),prevMes?numAvg(allPrev,col(qi)):null)+'</tr>';})(qi);}
   t2rows+='<tr class="avg-row"><td class="namecell">Promedio</td>'+projs.map(function(p){return inlineCell(p.prom,p.promPrev);}).join('')+inlineCell(avgArr(projs.map(function(p){return p.prom;})),prevMes?avgArr(projs.map(function(p){return p.promPrev;})):null)+'</tr>';
   var t2='<div class="section-label">Por proyecto · '+esc(mes)+(prevMes?' · Δ vs '+esc(prevMes):'')+'</div><div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+t2head+'</tr></thead><tbody>'+t2rows+'</tbody></table></div><div class="card-sub" style="margin-top:6px">Peor promedio a la izquierda · bajo cada valor, la Δ vs el mes anterior.</div></div>';
-  // ════ TABLA 3 · asignar nombres a las respuestas anónimas, por proyecto ════
+  // ════ TABLA 3 · matriz consolidada: respuestas (columnas, agrupadas por proyecto) × preguntas (filas) ════
   var dlId='pc-name-dl',dlOpts={};STAFF.forEach(function(s){if(s.name)dlOpts[s.name]=1;});codes.forEach(function(c){(REG[c]&&REG[c].people||[]).forEach(function(p){if(p.name)dlOpts[p.name]=1;});});
   var dlHtml='<datalist id="'+dlId+'">'+Object.keys(dlOpts).map(function(n){return '<option value="'+esc(n)+'">';}).join('')+'</datalist>';
-  var t3blocks=projs.slice().sort(function(a,b){return a.label<b.label?-1:a.label>b.label?1:0;}).map(function(p){
-    var rc=pcRows(p.code,mes);if(!rc.length)return '';
-    var hr='<tr>'+rc.map(function(r){return '<th class="num">'+esc(String(r[pcCol(PC_IDX.cargo)]||'—'))+'</th>';}).join('')+'</tr>';
-    var nr='<tr>'+rc.map(function(r,i){var key=pcRespKey(r,p.code,mes+'#'+i),asig=PS_CONSULTOR[key]!=null?String(PS_CONSULTOR[key]).trim():'';return '<td>'+(psEditable()?'<input class="ps-cons-inp" list="'+dlId+'" data-key="'+esc(key)+'" value="'+esc(asig)+'" placeholder="nombre" onchange="savePCConsultor(this)" style="width:110px">':(asig?'<span class="namecell">'+esc(asig)+'</span>':'<span class="muted">—</span>'))+'</td>';}).join('')+'</tr>';
-    return '<div style="margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:4px">'+esc(p.label)+' <span class="muted" style="font-weight:400;font-size:11px">· '+rc.length+' respuesta'+(rc.length!==1?'s':'')+'</span></div><div class="dtable-wrap"><table class="dtable"><thead>'+hr+'</thead><tbody>'+nr+'</tbody></table></div></div>';
-  }).join('');
-  var t3='<div class="section-label">Asignar nombres a las respuestas · '+esc(mes)+'</div><div class="card"><div class="card-sub" style="margin-bottom:8px">Cada columna es una respuesta anónima (por cargo). '+(psEditable()?'Escribe el nombre y se guarda para todo el equipo.':'Solo un admin puede editar los nombres.')+'</div>'+dlHtml+t3blocks+'</div>';
+  var flat=[];projs.forEach(function(p){pcRows(p.code,mes).forEach(function(r,i){flat.push({code:p.code,label:p.label,r:r,i:i});});});
+  var t3;
+  if(!flat.length){t3='<div class="section-label">Detalle por respuesta · '+esc(mes)+'</div><div class="card"><div class="muted">Sin respuestas este mes.</div></div>';}
+  else{
+    var projRow='<th>Proyecto</th>';projs.forEach(function(p){var n=pcRows(p.code,mes).length;if(n)projRow+='<th class="num" colspan="'+n+'" style="background:var(--primary);color:#fff;text-transform:none;font-size:11.5px">'+esc(p.label.split(/\s*·\s*|\s+/)[0])+'</th>';});
+    var cargoRow='<th>Cargo</th>'+flat.map(function(f){return '<th class="num" style="text-transform:none;font-style:italic;font-weight:500;color:var(--muted)">'+esc(String(f.r[pcCol(PC_IDX.cargo)]||'—'))+'</th>';}).join('');
+    var nameRow='<th>Nombre</th>'+flat.map(function(f){var key=pcRespKey(f.r,f.code,mes+'#'+f.i),asig=PS_CONSULTOR[key]!=null?String(PS_CONSULTOR[key]).trim():'';return '<th class="num" style="text-transform:none;font-weight:500">'+(psEditable()?'<input class="ps-cons-inp" list="'+dlId+'" data-key="'+esc(key)+'" value="'+esc(asig)+'" placeholder="—" onchange="savePCConsultor(this)" style="width:78px">':(asig?'<span class="namecell">'+esc(asig)+'</span>':'<span class="muted">—</span>'))+'</th>';}).join('');
+    var qRows='';for(var qi=0;qi<7;qi++){(function(qi){qRows+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+flat.map(function(f){var v=parseN(f.r[pcCol(PC_IDX.q0+qi)]);return '<td class="num" style="color:'+scoreColor(v,'pulse')+';font-weight:'+(v!=null&&v<TH?'700':'500')+'">'+(v!=null?v:'—')+'</td>';}).join('')+'</tr>';})(qi);}
+    function avgResp(f,skip){var a=[];for(var qi=0;qi<7;qi++){if(qi===skip)continue;var v=parseN(f.r[pcCol(PC_IDX.q0+qi)]);if(v!=null)a.push(v);}return a.length?Math.round(a.reduce(function(x,y){return x+y;},0)/a.length*10)/10:null;}
+    var promRow='<tr class="avg-row"><td class="namecell">Promedio</td>'+flat.map(function(f){return '<td class="num">'+scell(avgResp(f,-1),'pulse')+'</td>';}).join('')+'</tr>';
+    var promRow2='<tr class="avg-row"><td class="namecell">Promedio sin desarrollo de empresa</td>'+flat.map(function(f){return '<td class="num">'+scell(avgResp(f,5),'pulse')+'</td>';}).join('')+'</tr>';
+    t3='<div class="section-label">Detalle por respuesta (agrupado por proyecto) · '+esc(mes)+'</div><div class="card">'+dlHtml+'<div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+projRow+'</tr><tr>'+cargoRow+'</tr><tr>'+nameRow+'</tr></thead><tbody>'+qRows+promRow+promRow2+'</tbody></table></div><div class="card-sub" style="margin-top:6px">'+(psEditable()?'La fila "Nombre" es editable (solo tu usuario) y se guarda para todo el equipo.':'La fila "Nombre" solo la puede rellenar el usuario autorizado.')+' "Promedio sin desarrollo de empresa" excluye la pregunta de Rol.</div></div>';
+  }
   body.innerHTML='<div class="tline">Mes: <b>'+esc(mes)+'</b> · dimensiones en filas (mismo orden en todas las tablas).</div>'+t1+t2+t3;
 }
 function avgArr(a){var f=a.filter(function(v){return v!=null;});return f.length?Math.round(f.reduce(function(x,y){return x+y;},0)/f.length*10)/10:null;}
