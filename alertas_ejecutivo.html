@@ -353,13 +353,13 @@ var SUPABASE_URL='https://dmphptxhnfnhvwcyfluy.supabase.co';      // p.ej. https
 var SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtcGhwdHhobmZuaHZ3Y3lmbHV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMTI3MDAsImV4cCI6MjA5NjU4ODcwMH0.sKGhIzR2Jj3eB0lvxECj4dTagmlhgxJstJO558FhhWQ';    // anon public key (NO el service_role)
 var SUPABASE_READY=/^https?:\/\//.test(SUPABASE_URL)&&SUPABASE_ANON_KEY.length>20;
 var SB=null,ROLE=null,CURRENT_EMAIL=null,AUTHED=false;
-var NAME_EDITOR='apino@summapartners.com'; // único correo autorizado a rellenar/guardar nombres en Pulse
+var NAME_EDITOR='apino@summapartners.com'; // único correo autorizado a editar/guardar nombres (Pulse) y "Pedidas" (Vacaciones)
 var VAC_OV={}; // overrides de "futuras pedidas" por persona (Supabase)
-function vacEditable(){return SUPABASE_READY&&ROLE==='admin';}
+function vacEditable(){return SUPABASE_READY&&CURRENT_EMAIL===NAME_EDITOR;}
 function vacFut(r,name){var k=canonName(name);return VAC_OV[k]!=null?VAC_OV[k]:vacFuturas(r);}
 function vacFutCell(key,fut){if(vacEditable())return '<input type="number" step="0.5" min="0" class="vac-inp" data-persona="'+esc(key)+'" value="'+(fut!=null?fut:'')+'" onchange="saveVacFut(this)">';return fut>0?fmt(fut)+'d':'<span class="muted">sin pedir</span>';}
 function loadVacOverrides(cb){if(!SB){VAC_OV={};return cb&&cb();}SB.from('vac_overrides').select('persona,futuras').then(function(r){VAC_OV={};if(!r.error&&r.data)r.data.forEach(function(x){VAC_OV[x.persona]=x.futuras;});cb&&cb();});}
-function saveVacFut(inp){var persona=inp.getAttribute('data-persona');var val=inp.value===''?null:parseFloat(inp.value);if(val!=null&&isNaN(val))return;VAC_OV[persona]=val;if(SB&&ROLE==='admin'){inp.style.outline='2px solid var(--vigilar)';SB.from('vac_overrides').upsert({persona:persona,futuras:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'persona'}).then(function(r){inp.style.outline='2px solid '+(r.error?'var(--critico)':'var(--ok)');setTimeout(function(){inp.style.outline='';},1200);});}}
+function saveVacFut(inp){var persona=inp.getAttribute('data-persona');var val=inp.value===''?null:parseFloat(inp.value);if(val!=null&&isNaN(val))return;VAC_OV[persona]=val;if(SB&&CURRENT_EMAIL===NAME_EDITOR){inp.style.outline='2px solid var(--vigilar)';SB.from('vac_overrides').upsert({persona:persona,futuras:val,updated_by:CURRENT_EMAIL,updated_at:new Date().toISOString()},{onConflict:'persona'}).then(function(r){inp.style.outline='2px solid '+(r.error?'var(--critico)':'var(--ok)');setTimeout(function(){inp.style.outline='';},1200);});}}
 var PS_CONSULTOR={}; // consultor (staff) asignado por respuesta (Supabase, tabla ps_consultor): respKey -> nombre. Claves Pit Stop: CODE|fecha|id · claves Pulse: "pulse|CODE|id"
 function psEditable(){return SUPABASE_READY&&CURRENT_EMAIL===NAME_EDITOR;}
 function psRespKey(r){var code=normCode(r[psCol(PS.proyecto)]);var fecha=String(r[psCol(PS.fecha)]||'').trim();var id=PS.id>=0?String(r[psCol(PS.id)]||'').trim():'';if(!id)id=String(r[psCol(PS.nombre)]||'').trim()||String(r[psCol(PS.correo)]||'').trim();return code+'|'+fecha+'|'+id;}
