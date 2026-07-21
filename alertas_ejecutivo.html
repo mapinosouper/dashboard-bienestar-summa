@@ -321,7 +321,8 @@ a{color:inherit}
   <div class="view" id="v-traslados">
     <div class="h1">🚗 Traslados PM · por proyecto</div>
     <div class="sub">Llegadas tardías (21:00–00:00) y trasnoches (post 00:00), por proyecto.</div>
-    <div class="selectbar"><span class="sel-lbl">Agrupar</span><select class="sel" id="tr-group" onchange="fillTrPeriods();renderTraslados()"><option value="semana">Por semana</option><option value="mes">Por mes</option></select><span class="sel-lbl">Período</span><select class="sel" id="tr-period" onchange="renderTraslados()"></select><span id="tr-period-range" class="muted" style="font-size:11.5px"></span><span class="sel-lbl">vs</span><select class="sel" id="tr-period2" onchange="renderTraslados()"></select><label class="switch" style="margin-left:6px"><input type="checkbox" id="tr-showok" onchange="renderTraslados()"><span class="track"></span> Mostrar proyectos OK</label></div>
+    <div class="selectbar"><span class="sel-lbl">Fecha de referencia</span><input type="date" class="sel" id="tr-ref" onchange="renderTraslados()"><span class="sel-lbl">Ventana</span><select class="sel" id="tr-window" onchange="renderTraslados()"><option value="2">Últimas 2 semanas</option><option value="4" selected>Últimas 4 semanas</option><option value="8">Últimas 8 semanas</option><option value="12">Últimas 12 semanas</option></select></div>
+    <div class="pillbar" id="tr-view-pills"><button class="pill active" data-v="proyecto" onclick="setTrView('proyecto')">Por proyecto</button><button class="pill" data-v="persona" onclick="setTrView('persona')">Por persona</button></div>
     <div id="tr-body"></div>
   </div>
 
@@ -685,7 +686,7 @@ function ddPulseContent(code,mode){
 }
 function ddPitstop(code){
   var groups=psGrouped(code);if(!groups.length)return '<div class="empty">Este proyecto no tiene Pit Stops registrados.</div>';
-  function whoOf(r,i){return psConsultorOf(r)||('Resp. '+(i+1));}
+  function whoOf(r,i){return 'Resp. '+(i+1);} // Pit Stop anónimo: nunca mostrar el nombre del respondente
   function numCell(v){var n=parseN(v);return '<td class="num" style="color:'+scoreColor(n,'pitstop')+';font-weight:700">'+(n!=null?n:'—')+'</td>';}
   function siCell(v,mode){var s=isSi(v);if(s===null)return '<td class="num muted">—</td>';if(mode==='good')return '<td class="num">'+(s?'<span class="yes">Sí</span>':'<span class="no">No</span>')+'</td>';return '<td class="num">'+(s?'<span class="warnflag">Sí</span>':'<span class="muted">No</span>')+'</td>';}
   var h='';
@@ -797,70 +798,111 @@ function renderPitstop(){
   var data=codes.map(function(code){var g=psGrouped(code);if(!g.length)return{code:code,label:REG[code].label,none:true};
     var last=g[g.length-1],prev=g.length>=2?g[g.length-2]:null;
     var avgs=PS.nums.map(function(ci){return numAvg(last.rows,psCol(ci));});var prom=avgArr(avgs);
-    var promPrev=prev?avgArr(PS.nums.map(function(ci){return numAvg(prev.rows,psCol(ci));})):null;
+    var prevAvgs=prev?PS.nums.map(function(ci){return numAvg(prev.rows,psCol(ci));}):PS.nums.map(function(){return null;});
+    var promPrev=prev?avgArr(prevAvgs):null;
     var no=0;PS.alerts_si_good.forEach(function(ci){no+=last.rows.filter(function(r){return isSi(r[psCol(ci)])===false;}).length;});
     var bad=0;PS.dec_si_bad.forEach(function(ci){bad+=last.rows.filter(function(r){return isSi(r[psCol(ci)])===true;}).length;});
     var recent=(REF-last.ts)>=0&&(REF-last.ts)<=14*864e5;
-    return{code:code,label:REG[code].label,fecha:last.fecha,prevFecha:prev?prev.fecha:null,avgs:avgs,prom:prom,promPrev:promPrev,no:no,bad:bad,n:last.rows.length,recent:recent};}).filter(Boolean);
-  data.sort(function(a,b){if(a.none)return 1;if(b.none)return -1;return(a.prom==null?99:a.prom)-(b.prom==null?99:b.prom);});
-  var numH=PS.nums.map(function(ci,i){var q=shortQ(psCol(ci));var c=psConcept(q);return '<th class="num" title="'+esc(q)+'">P'+(i+1)+(c?' · '+esc(c):'')+'</th>';}).join('');
-  var head='<th>Proyecto</th><th>Último Pit Stop</th>'+numH+'<th class="num">Prom.</th>'+(cmp?'<th class="num">Var vs ant.</th>':'')+'<th class="num">Señales "No"</th><th class="num">Por discutir</th><th class="num">N</th>';
-  var span=cmp?9:8;
-  var rows=data.map(function(d){if(d.none)return '<tr><td class="namecell">'+esc(d.label)+' <span class="badge b-night">sin Pit Stop</span></td><td colspan="'+span+'" class="muted">Sin Pit Stop registrado</td></tr>';
-    return '<tr><td class="namecell">'+esc(d.label)+(d.recent?'':' <span class="badge b-late">+14 días</span>')+'</td><td>'+esc(d.fecha)+'</td>'+d.avgs.map(function(v){return '<td class="num">'+scell(v,'pitstop')+'</td>';}).join('')+'<td class="num">'+scell(d.prom,'pitstop')+'</td>'+(cmp?'<td class="num">'+(d.promPrev!=null?varCell(d.prom,d.promPrev):'<span class="muted">—</span>')+'</td>':'')+'<td class="num">'+(d.no>0?'<b class="no">'+d.no+'</b>':'0')+'</td><td class="num">'+(d.bad>0?'<b class="warnflag">'+d.bad+'</b>':'0')+'</td><td class="num muted">'+d.n+'</td></tr>';}).join('');
-  var leyenda=PS.nums.map(function(ci,i){return '<b>P'+(i+1)+'</b> '+esc(psConcept(shortQ(psCol(ci)))||shortQ(psCol(ci)));}).join(' · ');
-  body.innerHTML='<div class="tline">Pit Stop más reciente por proyecto, de menor a mayor promedio'+(cmp?' · <b>Var vs ant.</b> compara contra el Pit Stop anterior':'')+'. Pasa el cursor por las columnas P# para ver la pregunta completa.<br>'+leyenda+'</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    return{code:code,label:REG[code].label,fecha:last.fecha,avgs:avgs,prevAvgs:prevAvgs,prom:prom,promPrev:promPrev,no:no,bad:bad,n:last.rows.length,recent:recent,lastRows:last.rows,hasPrev:!!prev};}).filter(Boolean);
+  var withData=data.filter(function(d){return !d.none;}),noData=data.filter(function(d){return d.none;});
+  withData.sort(function(a,b){return(a.prom==null?99:a.prom)-(b.prom==null?99:b.prom);});
+  if(!withData.length){body.innerHTML='<div class="empty">Sin Pit Stops registrados.</div>';return;}
+  // ── ejes como Pulse Check: preguntas en filas, proyectos en columnas ──
+  var allLast=[];withData.forEach(function(d){allLast=allLast.concat(d.lastRows);});
+  var summaAvgs=PS.nums.map(function(ci){return numAvg(allLast,psCol(ci));});
+  var pLbl=PS.nums.map(function(ci,i){return 'P'+(i+1)+' · '+(psConcept(shortQ(psCol(ci)))||shortQ(psCol(ci)));});
+  function projTh(d){return '<th class="num" title="'+esc(d.label)+(d.recent?'':' · último Pit Stop +14 días')+'">'+esc(d.label.split(/\s*·\s*|\s+/)[0])+(d.recent?'':' <span class="badge b-late" style="font-size:8px;padding:1px 5px">+14d</span>')+'</th>';}
+  var head='<th>Dimensión</th>'+withData.map(projTh).join('')+'<th class="num">Summa</th>';
+  var rows='<tr><td class="namecell muted" style="font-weight:400">Último Pit Stop</td>'+withData.map(function(d){return '<td class="num muted" style="font-size:10px">'+esc(d.fecha)+'</td>';}).join('')+'<td></td></tr>';
+  PS.nums.forEach(function(ci,i){rows+='<tr><td class="namecell">'+esc(pLbl[i])+'</td>'+withData.map(function(d){return '<td class="num">'+scell(d.avgs[i],'pitstop')+'</td>';}).join('')+'<td class="num">'+scell(summaAvgs[i],'pitstop')+'</td></tr>';});
+  rows+='<tr class="avg-row"><td class="namecell">Promedio</td>'+withData.map(function(d){return '<td class="num">'+scell(d.prom,'pitstop')+'</td>';}).join('')+'<td class="num">'+scell(avgArr(summaAvgs),'pitstop')+'</td></tr>';
+  rows+='<tr><td class="namecell">Señales "No"</td>'+withData.map(function(d){return '<td class="num">'+(d.no>0?'<b class="no">'+d.no+'</b>':'0')+'</td>';}).join('')+'<td class="num muted">'+withData.reduce(function(s,d){return s+d.no;},0)+'</td></tr>';
+  rows+='<tr><td class="namecell">Por discutir</td>'+withData.map(function(d){return '<td class="num">'+(d.bad>0?'<b class="warnflag">'+d.bad+'</b>':'0')+'</td>';}).join('')+'<td class="num muted">'+withData.reduce(function(s,d){return s+d.bad;},0)+'</td></tr>';
+  rows+='<tr><td class="namecell muted" style="font-weight:400">N respuestas</td>'+withData.map(function(d){return '<td class="num muted">'+d.n+'</td>';}).join('')+'<td class="num muted">'+allLast.length+'</td></tr>';
+  var leyenda=pLbl.map(function(l){var p=l.split(' · ');return '<b>'+p[0]+'</b> '+p.slice(1).join(' · ');}).join(' · ');
+  // ── variación vs Pit Stop anterior (solo con toggle activo) ──
+  var cmpBlock='';
+  if(cmp){var projsC=withData.filter(function(d){return d.hasPrev;});
+    if(projsC.length){var headC='<th>Dimensión</th>'+projsC.map(projTh).join('');var rowsC='';
+      PS.nums.forEach(function(ci,i){rowsC+='<tr><td class="namecell">'+esc(pLbl[i])+'</td>'+projsC.map(function(d){return '<td class="num">'+varCell(d.avgs[i],d.prevAvgs[i])+'</td>';}).join('')+'</tr>';});
+      rowsC+='<tr class="avg-row"><td class="namecell">Promedio</td>'+projsC.map(function(d){return '<td class="num">'+varCell(d.prom,d.promPrev)+'</td>';}).join('')+'</tr>';
+      cmpBlock='<div class="section-label">Variación vs Pit Stop anterior</div><div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+headC+'</tr></thead><tbody>'+rowsC+'</tbody></table></div><div class="card-sub" style="margin-top:6px">Solo proyectos con un Pit Stop anterior. ↑ verde = subió · ↓ rojo = bajó.</div></div>';
+    }else cmpBlock='<div class="section-label">Variación vs Pit Stop anterior</div><div class="card"><div class="muted">Ningún proyecto tiene un Pit Stop anterior para comparar.</div></div>';
+  }
+  var foot=noData.length?'<div class="tline" style="margin-top:8px">Sin Pit Stop registrado: '+noData.map(function(d){return esc(d.label);}).join(' · ')+'.</div>':'';
+  body.innerHTML='<div class="tline">Pit Stop más reciente por proyecto · dimensiones en filas, proyectos en columnas (peor promedio a la izquierda). Pasa el cursor por el código para ver el proyecto.<br>'+leyenda+'</div>'+
+    '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>'+cmpBlock+foot;
 }
 
 // ════════ RENDER · PANEL TRASLADOS ════════
-function trAllPeriods(group){var s={};DATA.tr.forEach(function(r){var d=parseTRDate(r[DATA._tr.fecha]);if(d)s[trPeriodKey(d,group)]=1;});return Object.keys(s).sort();}
-function fillTrPeriods(){var group=document.getElementById('tr-group').value;var ps=trAllPeriods(group);var p1=document.getElementById('tr-period'),p2=document.getElementById('tr-period2');
-  p1.innerHTML=ps.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');
-  p2.innerHTML='<option value="">— ninguno —</option>'+ps.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');
-  if(ps.length){p1.value=ps[ps.length-1];if(ps.length>=2)p2.value=ps[ps.length-2];}}
-function trDelta(val,prevVal,risk){if(prevVal==null)return '';var d=val-prevVal;if(d===0)return ' <span class="kpi-delta neu">=</span>';var cls=risk?(d>0?'bad':'good'):'neu';return ' <span class="kpi-delta '+cls+'">'+(d>0?'▲ +'+d:'▼ '+Math.abs(d))+'</span>';}
-function trCount(period,group){var tot=0,late=0,night=0,perProj={};var t=DATA._tr;
-  // Cuenta TODOS los traslados del período (igual que el gráfico), agrupados por su código de gasto real.
-  // Antes solo contaba proyectos del registro (REG), por eso las cards daban 0 en semanas sin match.
-  DATA.tr.forEach(function(r){
-    var d=parseTRDate(r[t.fecha]);if(!d||trPeriodKey(d,group)!==period)return;
-    var code=normCode(r[t.programa])||'(sin código)';
-    var h=parseTimeHour(r[t.hora]);var isL=h!=null&&h>=21&&h<24,isN=h!=null&&h>=0&&h<6;
-    var p=perProj[code]||(perProj[code]={total:0,late:0,night:0,_pe:{}});
-    p.total++;tot++;
-    if(isL){p.late++;late++;}if(isN){p.night++;night++;}
-    if(isL||isN){var nm=canonName((r[t.nombre]||'')+' '+(r[t.apellido]||''));if(nm)p._pe[nm]=1;}
-  });
-  Object.keys(perProj).forEach(function(c){perProj[c].people=Object.keys(perProj[c]._pe);delete perProj[c]._pe;});
-  return{tot:tot,late:late,night:night,perProj:perProj};}
-function trWeeklyChart(){
-  var byWeek={};DATA.tr.forEach(function(r){var d=parseTRDate(r[DATA._tr.fecha]);if(!d)return;var wk=weekKey(d),h=parseTimeHour(r[DATA._tr.hora]);byWeek[wk]=byWeek[wk]||{late:0,night:0};if(h!=null&&h>=0&&h<6)byWeek[wk].night++;else if(h!=null&&h>=21&&h<24)byWeek[wk].late++;});
-  var weeks=Object.keys(byWeek).sort();if(!weeks.length)return '';
-  var max=1;weeks.forEach(function(w){max=Math.max(max,byWeek[w].late,byWeek[w].night);});
-  function bh(n){return n>0?Math.max(3,Math.round(n/max*80)):0;}
-  var bars=weeks.map(function(w){var d=byWeek[w];return '<div class="bweek"><div class="bbars"><div class="bbar late" style="height:'+bh(d.late)+'px" title="'+d.late+' tardíos · '+w+'"></div><div class="bbar night" style="height:'+bh(d.night)+'px" title="'+d.night+' trasnoches · '+w+'"></div></div><div class="bval">'+(d.night||'')+'</div><div class="blabel">'+esc(w.replace(/^\d{4}-/,''))+'</div></div>';}).join('');
-  return '<div class="card"><div class="card-h">Trasnoches del equipo por semana</div><div class="card-sub">Barras: <span style="color:var(--vigilar-d);font-weight:700">tardíos</span> · <span style="color:var(--critico);font-weight:700">trasnoches</span>. El número sobre la barra es la cantidad de trasnoches.</div><div class="bchart">'+bars+'</div></div>';
+var TR_VIEW='proyecto';
+function setTrView(v){TR_VIEW=v;document.querySelectorAll('#tr-view-pills .pill').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-v')===v);});renderTraslados();}
+function initTrControls(){var maxTs=null;DATA.tr.forEach(function(r){var d=parseTRDate(r[DATA._tr.fecha]);if(d&&(maxTs==null||d.getTime()>maxTs))maxTs=d.getTime();});var dref=maxTs!=null?new Date(maxTs):new Date(REF);var pad=function(n){return(n<10?'0':'')+n;};var el=document.getElementById('tr-ref');if(el)el.value=dref.getFullYear()+'-'+pad(dref.getMonth()+1)+'-'+pad(dref.getDate());}
+function trFmtD(d){return d.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});}
+// Ventana móvil: viajes en [ref − N semanas, ref], con la lista de semanas continua para las tendencias.
+function trWindowData(){
+  var refStr=(document.getElementById('tr-ref')||{}).value;
+  var weeks=parseInt((document.getElementById('tr-window')||{}).value,10)||4;
+  var ref=refStr?new Date(refStr+'T23:59:59'):new Date(REF);
+  var from=new Date(ref.getTime()-weeks*7*864e5);
+  var t=DATA._tr,trips=[];
+  DATA.tr.forEach(function(r){var d=parseTRDate(r[t.fecha]);if(!d)return;if(d.getTime()<from.getTime()||d.getTime()>ref.getTime())return;var h=parseTimeHour(r[t.hora]);trips.push({name:canonName((r[t.nombre]||'')+' '+(r[t.apellido]||'')),code:normCode(r[t.programa])||'(sin código)',wk:weekKey(d),night:(h!=null&&h>=0&&h<6),late:(h!=null&&h>=21&&h<24)});});
+  var wk=[],seen={},dd=new Date(from.getTime());while(dd.getTime()<=ref.getTime()){var k=weekKey(dd);if(!seen[k]){seen[k]=1;wk.push(k);}dd=new Date(dd.getTime()+7*864e5);}var rk=weekKey(ref);if(!seen[rk])wk.push(rk);
+  return{trips:trips,weeks:wk,ref:ref,from:from,nweeks:weeks};
 }
 function renderTraslados(){
-  var body=document.getElementById('tr-body');var group=document.getElementById('tr-group').value;
-  var period=document.getElementById('tr-period').value,period2=document.getElementById('tr-period2').value;
-  if(!period){body.innerHTML='<div class="empty">Sin datos de traslados.</div>';return;}
-  (function(){var inP=[];DATA.tr.forEach(function(r){var d=parseTRDate(r[DATA._tr.fecha]);if(d&&trPeriodKey(d,group)===period)inP.push(d);});var el=document.getElementById('tr-period-range');if(el){if(inP.length){inP.sort(function(a,b){return a-b;});var f=function(d){return d.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});};el.textContent='· '+f(inP[0])+' – '+f(inP[inP.length-1]);}else el.textContent='';}})();
-  var cur=trCount(period,group),prev=period2?trCount(period2,group):null;
-  var lbl=group==='mes'?'mes':'semana';
-  var kpis='<div class="kpis">'+
-    '<div class="kpi"><div class="v">'+cur.tot+trDelta(cur.tot,prev?prev.tot:null,false)+'</div><div class="l">Viajes en el período</div></div>'+
-    '<div class="kpi warn"><div class="v">'+cur.late+trDelta(cur.late,prev?prev.late:null,true)+'</div><div class="l">Tardíos 21:00–00:00</div></div>'+
-    '<div class="kpi alert"><div class="v">'+cur.night+trDelta(cur.night,prev?prev.night:null,true)+'</div><div class="l">Trasnoches post 00:00</div></div></div>';
-  var showOk=document.getElementById('tr-showok')&&document.getElementById('tr-showok').checked;
-  var rowsData=Object.keys(cur.perProj).map(function(code){return{code:code,label:REG[code]?REG[code].label:code,d:cur.perProj[code]};}).filter(function(x){return showOk||x.d.late>0||x.d.night>0;});
-  rowsData.sort(function(a,b){return(b.d.night*2+b.d.late)-(a.d.night*2+a.d.late);});
-  var head='<th>Proyecto</th><th class="num">Viajes</th><th class="num">Tardíos 21–00</th><th class="num">Trasnoches 00–06</th><th class="num">% equipo afectado</th><th>Personas señaladas</th>';
-  var rows=rowsData.map(function(r){var d=r.d;var ts=(REG[r.code]&&REG[r.code].people.length)||0;var aff=d.people.length;var pct=ts?Math.round(aff/ts*100):null;
-    return '<tr><td class="namecell">'+esc(r.label)+'</td><td class="num">'+d.total+'</td><td class="num">'+(d.late>0?'<span class="badge b-late">'+d.late+'</span>':'0')+'</td><td class="num">'+(d.night>0?'<span class="badge b-night">'+d.night+'</span>':'0')+'</td><td class="num">'+(pct!=null?'<b'+(pct>=50?' style="color:var(--critico)"':'')+'>'+pct+'%</b> <span class="muted" style="font-size:10px">('+aff+'/'+ts+')</span>':'—')+'</td><td>'+(d.people.length?d.people.map(function(p){return '<span class="person">'+esc(p)+'</span>';}).join(' '):'<span class="muted">—</span>')+'</td></tr>';}).join('');
+  var body=document.getElementById('tr-body');
+  if(!DATA.tr||!DATA.tr.length){body.innerHTML='<div class="empty">Sin datos de traslados.</div>';return;}
+  var W=trWindowData();
   var iss=trDataIssues();
-  var issMsg=(iss.futuras||iss.ilegibles)?'<div class="tline" style="color:var(--vigilar-d)">⚠️ Datos del export con error: '+(iss.futuras?'<b>'+iss.futuras+'</b> viaje'+(iss.futuras>1?'s':'')+' con fecha futura (imposible)':'')+(iss.futuras&&iss.ilegibles?' · ':'')+(iss.ilegibles?'<b>'+iss.ilegibles+'</b> sin fecha legible':'')+' — excluidos del análisis. Revisar el archivo de Uber al republicar.</div>':'';
-  body.innerHTML=kpis+trWeeklyChart()+issMsg+'<div class="tline">Período: <b>'+esc(period)+'</b>'+(period2?' · comparado con '+esc(period2)+' (Δ en los KPIs)':'')+' · agrupado por '+lbl+'.'+(staffingLoadedAt()?' · El “% equipo afectado” usa el staffing del '+fmtStaffDate(staffingLoadedAt())+'; los proyectos sin equipo conocido (—) son históricos, anteriores a esa foto.':'')+'</div><div class="card"><div class="dtable-wrap"><table class="dtable"><thead><tr>'+head+'</tr></thead><tbody>'+(rows||'<tr><td colspan="6" class="muted">Sin proyectos con tardíos o trasnoches en el período (activa "Mostrar proyectos OK").</td></tr>')+'</tbody></table></div></div>';
+  var issMsg=(iss.futuras||iss.ilegibles)?'<div class="tline" style="color:var(--vigilar-d)">⚠️ Export con error: '+(iss.futuras?'<b>'+iss.futuras+'</b> con fecha futura':'')+(iss.futuras&&iss.ilegibles?' · ':'')+(iss.ilegibles?'<b>'+iss.ilegibles+'</b> sin fecha legible':'')+' — excluidos del análisis.</div>':'';
+  var header='<div class="tline">Ventana: <b>'+esc(trFmtD(W.from))+' – '+esc(trFmtD(W.ref))+'</b> · '+W.nweeks+' semanas. Tardío = llegada 21:00–00:00 · Trasnoche = post 00:00.</div>'+issMsg;
+  if(!W.trips.some(function(x){return x.night||x.late;})){body.innerHTML=header+'<div class="empty">Sin tardíos ni trasnoches en la ventana elegida.</div>';return;}
+  body.innerHTML=header+(TR_VIEW==='persona'?trViewPersona(W):trViewProyecto(W));
+}
+// Vista 1: por proyecto (desplegable) → personas con nº de trasnoches/tardíos por semana
+function trViewProyecto(W){
+  var byProj={};
+  W.trips.forEach(function(x){if(!(x.night||x.late))return;var pj=byProj[x.code]||(byProj[x.code]={people:{}});var pe=pj.people[x.name]||(pj.people[x.name]={});var w=pe[x.wk]||(pe[x.wk]={night:0,late:0});if(x.night)w.night++;if(x.late)w.late++;});
+  var codes=Object.keys(byProj);if(!codes.length)return '<div class="empty">Sin tardíos ni trasnoches en la ventana.</div>';
+  function tot(pj){var n=0,l=0;Object.keys(pj.people).forEach(function(nm){W.weeks.forEach(function(w){var c=pj.people[nm][w];if(c){n+=c.night;l+=c.late;}});});return{n:n,l:l};}
+  codes.sort(function(a,b){var ta=tot(byProj[a]),tb=tot(byProj[b]);return(tb.n*2+tb.l)-(ta.n*2+ta.l);});
+  var wkHead=W.weeks.map(function(w){return '<th class="num" title="'+esc(w)+'">'+esc(w.replace(/^\d{4}-/,''))+'</th>';}).join('');
+  function pair(n,l,bold){var s=[];if(n)s.push('<span style="color:var(--critico);font-weight:'+(bold?800:700)+'">'+n+'</span>');if(l)s.push('<span style="color:var(--vigilar-d);font-weight:'+(bold?800:700)+'">'+l+'</span>');return s.join(' <span class="muted">/</span> ');}
+  var blocks=codes.map(function(code){
+    var pj=byProj[code],t=tot(pj),label=REG[code]?REG[code].label:code;
+    var chips=(t.n>0?'<span class="badge b-night">'+t.n+' trasnoche'+(t.n>1?'s':'')+'</span> ':'')+(t.l>0?'<span class="badge b-late">'+t.l+' tardío'+(t.l>1?'s':'')+'</span>':'');
+    var pers=Object.keys(pj.people).sort(function(a,b){var ta=0,tb=0;W.weeks.forEach(function(w){if(pj.people[a][w])ta+=pj.people[a][w].night*2+pj.people[a][w].late;if(pj.people[b][w])tb+=pj.people[b][w].night*2+pj.people[b][w].late;});return tb-ta;});
+    var wkTot={};W.weeks.forEach(function(w){wkTot[w]={n:0,l:0};});
+    var prows=pers.map(function(nm){var tn=0,tl=0;var cells=W.weeks.map(function(w){var c=pj.people[nm][w];if(c){tn+=c.night;tl+=c.late;wkTot[w].n+=c.night;wkTot[w].l+=c.late;}if(!c||(!c.night&&!c.late))return '<td class="num muted">·</td>';return '<td class="num">'+pair(c.night,c.late)+'</td>';}).join('');return '<tr><td class="namecell">'+esc(nm)+'</td>'+cells+'<td class="num"><b>'+(pair(tn,tl,true)||'0')+'</b></td></tr>';}).join('');
+    var totRow='<tr class="avg-row"><td class="namecell">Total</td>'+W.weeks.map(function(w){return '<td class="num">'+(pair(wkTot[w].n,wkTot[w].l,true)||'<span class="muted">·</span>')+'</td>';}).join('')+'<td class="num"><b>'+(pair(t.n,t.l,true)||'0')+'</b></td></tr>';
+    return '<div class="collapse"><div class="collapse-h" onclick="this.parentNode.classList.toggle(\'open\')"><span class="exp-toggle">›</span> <b>'+esc(label)+'</b> '+chips+'</div><div class="collapse-b"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Persona</th>'+wkHead+'<th class="num">Total</th></tr></thead><tbody>'+prows+totRow+'</tbody></table></div></div></div>';
+  }).join('');
+  return '<div class="card-sub" style="margin-bottom:8px">Cada celda: <span style="color:var(--critico);font-weight:700">trasnoches</span> <span class="muted">/</span> <span style="color:var(--vigilar-d);font-weight:700">tardíos</span> por semana. Columna y fila <b>Total</b> = suma de la ventana. Clic en un proyecto para ver a su equipo.</div><div class="card">'+blocks+'</div>';
+}
+// Vista 2: por persona → gráfico de tendencia + alerta por cambio vs promedio móvil de 4 semanas
+function trViewPersona(W){
+  var byP={};
+  W.trips.forEach(function(x){var pe=byP[x.name]||(byP[x.name]={});var w=pe[x.wk]||(pe[x.wk]={night:0,late:0,flag:0});if(x.night){w.night++;w.flag++;}if(x.late){w.late++;w.flag++;}});
+  function alertOf(nm){var pw=W.weeks.filter(function(w){return byP[nm][w];});if(!pw.length)return{sev:null};var latest=pw[pw.length-1],cur=byP[nm][latest].flag,prior=pw.slice(0,-1).slice(-4);if(!prior.length)return{sev:null,cur:cur};var base=prior.reduce(function(s,w){return s+byP[nm][w].flag;},0)/prior.length;var delta=cur-base;return{sev:delta>=2?'critico':delta>=1?'vigilar':null,cur:cur,base:Math.round(base*10)/10};}
+  function totND(nm){var n=0,l=0;W.weeks.forEach(function(w){var c=byP[nm][w];if(c){n+=c.night;l+=c.late;}});return{n:n,l:l};}
+  // solo personas con cambio de comportamiento en la ventana
+  var rows=Object.keys(byP).map(function(nm){return{nm:nm,a:alertOf(nm)};}).filter(function(r){return r.a.sev;});
+  if(!rows.length)return '<div class="empty">Ningún cambio de comportamiento en la ventana elegida.</div>';
+  var rank={critico:0,vigilar:1};
+  rows.sort(function(a,b){if(rank[a.a.sev]!==rank[b.a.sev])return rank[a.a.sev]-rank[b.a.sev];return (b.a.cur-b.a.base)-(a.a.cur-a.a.base);});
+  var palette=['#78365F','#1F6F8B','#C98A2E','#3E7C59','#8E44AD','#B0453A','#2C3E70','#5D6D7E'];
+  var series=rows.map(function(r,idx){return{nm:r.nm,sev:r.a.sev,a:r.a,color:palette[idx%palette.length],values:W.weeks.map(function(w){var c=byP[r.nm][w];return c?c.flag:0;})};});
+  var max=1;series.forEach(function(s){s.values.forEach(function(v){if(v>max)max=v;});});
+  var VW=Math.max(360,W.weeks.length*44),VH=170,pl=28,pr=14,pt=12,pb=26,iw=VW-pl-pr,ih=VH-pt-pb;
+  var X=function(i){return pl+(W.weeks.length<=1?iw/2:iw*i/(W.weeks.length-1));};
+  var Y=function(v){return pt+ih*(1-(max?v/max:0));};
+  var grid='<line x1="'+pl+'" y1="'+(pt+ih)+'" x2="'+(VW-pr)+'" y2="'+(pt+ih)+'" stroke="var(--line)" stroke-width="1"/><line x1="'+pl+'" y1="'+pt+'" x2="'+(VW-pr)+'" y2="'+pt+'" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 3"/><text x="'+(pl-4)+'" y="'+(pt+3)+'" text-anchor="end" font-size="9" fill="var(--muted)">'+max+'</text><text x="'+(pl-4)+'" y="'+(pt+ih+3)+'" text-anchor="end" font-size="9" fill="var(--muted)">0</text>';
+  var xlabels=W.weeks.map(function(w,i){return '<text x="'+X(i).toFixed(1)+'" y="'+(VH-8)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(w.replace(/^\d{4}-/,''))+'</text>';}).join('');
+  var lines=series.map(function(s){var pts=s.values.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}).join(' ');var dots=s.values.map(function(v,i){return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="2.5" fill="'+s.color+'"/>';}).join('');return '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2"/>'+dots;}).join('');
+  var svg='<svg viewBox="0 0 '+VW+' '+VH+'" style="width:100%;height:auto;display:block">'+grid+lines+xlabels+'</svg>';
+  var legend=series.map(function(s){var td=totND(s.nm);return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;flex-wrap:wrap"><span style="width:12px;height:12px;border-radius:3px;background:'+s.color+';display:inline-block;flex-shrink:0"></span><b>'+esc(s.nm)+'</b> <span class="badge '+(s.sev==='critico'?'b-night':'b-late')+'">'+(s.sev==='critico'?'cambio fuerte':'cambio leve')+'</span> <span class="muted">reciente '+s.a.cur+' vs '+s.a.base+' · total ventana '+(td.n+td.l)+'</span></div>';}).join('');
+  return '<div class="card"><div class="card-h">Cambios de comportamiento · '+rows.length+' persona'+(rows.length>1?'s':'')+'</div><div class="card-sub">Trasnoches + tardíos por semana (una línea por persona). Solo quienes suben respecto de su promedio móvil de 4 semanas.</div>'+svg+'<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px">'+legend+'</div></div>';
 }
 
 // ════════ RENDER · PANEL VACACIONES ════════
@@ -892,7 +934,7 @@ function showScreen(s){
   document.getElementById('app').style.display=s==='app'?'block':'none';
 }
 function enterWith(d){
-  setData(d);buildModel();fillProjectSelect();fillMonths();fillTrPeriods();
+  setData(d);buildModel();fillProjectSelect();fillMonths();initTrControls();
   showScreen('app');go('resumen');decorateUserbar();
 }
 function enterReal(){enterWith({pc:UP.pc,ps:UP.ps,tr:UP.tr,vac:UP.vac,proj:UP.proj,projMeta:{},refDate:null});}
