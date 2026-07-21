@@ -759,6 +759,10 @@ function renderPulse(){
   var projs=codes.map(function(code){var rc=pcRows(code,mes);if(!rc.length)return null;var avgs=[];for(var qi=0;qi<7;qi++)avgs.push(numAvg(rc,pcCol(PC_IDX.q0+qi)));return{code:code,label:REG[code].label,avgs:avgs,prom:avgArr(avgs),n:rc.length};}).filter(Boolean);
   projs.sort(function(a,b){return(a.prom==null?99:a.prom)-(b.prom==null?99:b.prom);});
   var all=[];codes.forEach(function(c){all=all.concat(pcRows(c,mes));});
+  // ── mes anterior (para tabla de variación) ──
+  var _pm=pcMonths(),prevMes=_pm.indexOf(mes)>0?_pm[_pm.indexOf(mes)-1]:null;
+  var allPrev=[];if(prevMes)codes.forEach(function(c){allPrev=allPrev.concat(pcRows(c,prevMes));});
+  projs.forEach(function(p){var prc=prevMes?pcRows(p.code,prevMes):[];p.prevAvgs=[];for(var qi=0;qi<7;qi++)p.prevAvgs.push(prc.length?numAvg(prc,pcCol(PC_IDX.q0+qi)):null);p.promPrev=avgArr(p.prevAvgs);});
   function cargoOf(r){return normCargo(r[pcCol(PC_IDX.cargo)]);}
   // ── ejes invertidos: dimensiones (filas) × proyectos (columnas) ──
   var head='<th>Dimensión</th>'+projs.map(function(p){return '<th class="num" title="'+esc(p.label)+'">'+esc(p.label.split(/\s*·\s*|\s+/)[0])+'</th>';}).join('')+'<th class="num">Summa</th>';
@@ -771,8 +775,17 @@ function renderPulse(){
   var rows2='';
   for(var qi=0;qi<7;qi++){rows2+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+grpsC.map(function(g){return '<td class="num">'+scell(numAvg(g[1],pcCol(PC_IDX.q0+qi)),'pulse')+'</td>';}).join('')+'</tr>';}
   rows2+='<tr class="avg-row"><td class="namecell">Promedio</td>'+grpsC.map(function(g){var a=[];for(var qi=0;qi<7;qi++)a.push(numAvg(g[1],pcCol(PC_IDX.q0+qi)));return '<td class="num">'+scell(avgArr(a),'pulse')+'</td>';}).join('')+'</tr>';
+  // ── variación vs mes anterior (solo proyectos con datos el mes previo) ──
+  var projsV=projs.filter(function(p){return p.promPrev!=null;});
+  var headV='<th>Dimensión</th>'+projsV.map(function(p){return '<th class="num" title="'+esc(p.label)+'">'+esc(p.label.split(/\s*·\s*|\s+/)[0])+'</th>';}).join('')+'<th class="num">Summa</th>';
+  var rowsV='';
+  for(var qi=0;qi<7;qi++){(function(qi){rowsV+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+projsV.map(function(p){return '<td class="num">'+varCell(p.avgs[qi],p.prevAvgs[qi])+'</td>';}).join('')+'<td class="num">'+varCell(numAvg(all,pcCol(PC_IDX.q0+qi)),prevMes?numAvg(allPrev,pcCol(PC_IDX.q0+qi)):null)+'</td></tr>';})(qi);}
+  rowsV+='<tr class="avg-row"><td class="namecell">Promedio</td>'+projsV.map(function(p){return '<td class="num">'+varCell(p.prom,p.promPrev)+'</td>';}).join('')+'<td class="num">'+varCell(avgArr(projs.map(function(p){return p.prom;})),prevMes?avgArr(projs.map(function(p){return p.promPrev;})):null)+'</td></tr>';
+  var cmpBlock='<div class="section-label">Variación vs mes anterior'+(prevMes?' · '+esc(prevMes)+' → '+esc(mes):'')+'</div>'+
+    (prevMes&&projsV.length?'<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+headV+'</tr></thead><tbody>'+rowsV+'</tbody></table></div><div class="card-sub" style="margin-top:6px">Solo proyectos con datos en '+esc(prevMes)+'. ↑ verde = subió · ↓ rojo = bajó.</div></div>':'<div class="card"><div class="muted">No hay proyectos con datos del mes anterior para comparar.</div></div>');
   body.innerHTML='<div class="tline">Mes: <b>'+esc(mes)+'</b> · dimensiones en filas, proyectos en columnas (peor promedio a la izquierda). Pasa el cursor por el código para ver el proyecto.</div>'+
     '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
+    cmpBlock+
     '<div class="section-label">Promedio Summa por cargo · '+esc(mes)+'</div>'+
     '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head2+'</tr></thead><tbody>'+rows2+'</tbody></table></div></div>';
 }
