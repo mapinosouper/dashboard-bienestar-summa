@@ -839,6 +839,7 @@ var TR_VIEW='proyecto';
 function setTrView(v){TR_VIEW=v;document.querySelectorAll('#tr-view-pills .pill').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-v')===v);});renderTraslados();}
 function initTrControls(){var maxTs=null;DATA.tr.forEach(function(r){var d=parseTRDate(r[DATA._tr.fecha]);if(d&&(maxTs==null||d.getTime()>maxTs))maxTs=d.getTime();});var dref=maxTs!=null?new Date(maxTs):new Date(REF);var pad=function(n){return(n<10?'0':'')+n;};var el=document.getElementById('tr-ref');if(el)el.value=dref.getFullYear()+'-'+pad(dref.getMonth()+1)+'-'+pad(dref.getDate());}
 function trFmtD(d){return d.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});}
+function trWkLbl(i,n){var off=(n-1)-i;return off===0?'W':'W-'+off;} // W = semana de referencia; W-1, W-2… = anteriores
 // Ventana móvil: viajes en [ref − N semanas, ref], con la lista de semanas continua para las tendencias.
 function trWindowData(){
   var refStr=(document.getElementById('tr-ref')||{}).value;
@@ -856,7 +857,7 @@ function renderTraslados(){
   var W=trWindowData();
   var iss=trDataIssues();
   var issMsg=(iss.futuras||iss.ilegibles)?'<div class="tline" style="color:var(--vigilar-d)">⚠️ Export con error: '+(iss.futuras?'<b>'+iss.futuras+'</b> con fecha futura':'')+(iss.futuras&&iss.ilegibles?' · ':'')+(iss.ilegibles?'<b>'+iss.ilegibles+'</b> sin fecha legible':'')+' — excluidos del análisis.</div>':'';
-  var header='<div class="tline">Ventana: <b>'+esc(trFmtD(W.from))+' – '+esc(trFmtD(W.ref))+'</b> · '+W.nweeks+' semanas. Tardío = llegada 21:00–00:00 · Trasnoche = post 00:00.</div>'+issMsg;
+  var header='<div class="tline">Ventana: <b>'+esc(trFmtD(W.from))+' – '+esc(trFmtD(W.ref))+'</b> · '+W.nweeks+' semanas · <b>W</b> = semana de la fecha de referencia (W-1, W-2… = anteriores). Tardío = 21:00–00:00 · Trasnoche = post 00:00.</div>'+issMsg;
   if(!W.trips.some(function(x){return x.night||x.late;})){body.innerHTML=header+'<div class="empty">Sin tardíos ni trasnoches en la ventana elegida.</div>';return;}
   body.innerHTML=header+(TR_VIEW==='persona'?trViewPersona(W):trViewProyecto(W));
 }
@@ -867,7 +868,7 @@ function trViewProyecto(W){
   var codes=Object.keys(byProj);if(!codes.length)return '<div class="empty">Sin tardíos ni trasnoches en la ventana.</div>';
   function tot(pj){var n=0,l=0;Object.keys(pj.people).forEach(function(nm){W.weeks.forEach(function(w){var c=pj.people[nm][w];if(c){n+=c.night;l+=c.late;}});});return{n:n,l:l};}
   codes.sort(function(a,b){var ta=tot(byProj[a]),tb=tot(byProj[b]);return(tb.n*2+tb.l)-(ta.n*2+ta.l);});
-  var wkHead=W.weeks.map(function(w){return '<th class="num" title="'+esc(w)+'">'+esc(w.replace(/^\d{4}-/,''))+'</th>';}).join('');
+  var wkHead=W.weeks.map(function(w,i){return '<th class="num" title="'+esc(w)+'">'+trWkLbl(i,W.weeks.length)+'</th>';}).join('');
   function pair(n,l,bold){var s=[];if(n)s.push('<span style="color:var(--critico);font-weight:'+(bold?800:700)+'">'+n+'</span>');if(l)s.push('<span style="color:var(--vigilar-d);font-weight:'+(bold?800:700)+'">'+l+'</span>');return s.join(' <span class="muted">/</span> ');}
   var blocks=codes.map(function(code){
     var pj=byProj[code],t=tot(pj),label=REG[code]?REG[code].label:code;
@@ -898,7 +899,7 @@ function trViewPersona(W){
   var X=function(i){return pl+(W.weeks.length<=1?iw/2:iw*i/(W.weeks.length-1));};
   var Y=function(v){return pt+ih*(1-(max?v/max:0));};
   var grid='<line x1="'+pl+'" y1="'+(pt+ih)+'" x2="'+(VW-pr)+'" y2="'+(pt+ih)+'" stroke="var(--line)" stroke-width="1"/><line x1="'+pl+'" y1="'+pt+'" x2="'+(VW-pr)+'" y2="'+pt+'" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 3"/><text x="'+(pl-4)+'" y="'+(pt+3)+'" text-anchor="end" font-size="9" fill="var(--muted)">'+max+'</text><text x="'+(pl-4)+'" y="'+(pt+ih+3)+'" text-anchor="end" font-size="9" fill="var(--muted)">0</text>';
-  var xlabels=W.weeks.map(function(w,i){return '<text x="'+X(i).toFixed(1)+'" y="'+(VH-8)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(w.replace(/^\d{4}-/,''))+'</text>';}).join('');
+  var xlabels=W.weeks.map(function(w,i){return '<text x="'+X(i).toFixed(1)+'" y="'+(VH-8)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+trWkLbl(i,W.weeks.length)+'</text>';}).join('');
   var lines=series.map(function(s){var pts=s.values.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}).join(' ');var dots=s.values.map(function(v,i){return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="2.5" fill="'+s.color+'"/>';}).join('');return '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2"/>'+dots;}).join('');
   var svg='<svg viewBox="0 0 '+VW+' '+VH+'" style="width:100%;height:auto;display:block">'+grid+lines+xlabels+'</svg>';
   var legend=series.map(function(s){var td=totND(s.nm);return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;flex-wrap:wrap"><span style="width:12px;height:12px;border-radius:3px;background:'+s.color+';display:inline-block;flex-shrink:0"></span><b>'+esc(s.nm)+'</b> <span class="badge '+(s.sev==='critico'?'b-night':'b-late')+'">'+(s.sev==='critico'?'cambio fuerte':'cambio leve')+'</span> <span class="muted">reciente '+s.a.cur+' vs '+s.a.base+' · total ventana '+(td.n+td.l)+'</span></div>';}).join('');
