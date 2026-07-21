@@ -764,30 +764,33 @@ function renderPulse(){
   var allPrev=[];if(prevMes)codes.forEach(function(c){allPrev=allPrev.concat(pcRows(c,prevMes));});
   projs.forEach(function(p){var prc=prevMes?pcRows(p.code,prevMes):[];p.prevAvgs=[];for(var qi=0;qi<7;qi++)p.prevAvgs.push(prc.length?numAvg(prc,pcCol(PC_IDX.q0+qi)):null);p.promPrev=avgArr(p.prevAvgs);});
   function cargoOf(r){return normCargo(r[pcCol(PC_IDX.cargo)]);}
-  // ── ejes invertidos: dimensiones (filas) × proyectos (columnas) ──
-  var head='<th>Dimensión</th>'+projs.map(function(p){return '<th class="num" title="'+esc(p.label)+'">'+esc(p.label.split(/\s*·\s*|\s+/)[0])+'</th>';}).join('')+'<th class="num">Summa</th>';
-  var rows='';
-  for(var qi=0;qi<7;qi++){rows+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+projs.map(function(p){return '<td class="num">'+scell(p.avgs[qi],'pulse')+'</td>';}).join('')+'<td class="num">'+scell(numAvg(all,pcCol(PC_IDX.q0+qi)),'pulse')+'</td></tr>';}
-  rows+='<tr class="avg-row"><td class="namecell">Promedio</td>'+projs.map(function(p){return '<td class="num">'+scell(p.prom,'pulse')+'</td>';}).join('')+'<td class="num">'+scell(avgArr(projs.map(function(p){return p.prom;})),'pulse')+'</td></tr>';
-  // ── promedio Summa por cargo ──
-  var grpsC=[['General',all],['Analistas',all.filter(function(r){return cargoOf(r)==='Analista';})],['Asociados/as',all.filter(function(r){return cargoOf(r)==='Asociado/a';})]];
-  var head2='<th>Dimensión</th>'+grpsC.map(function(g){return '<th class="num">'+g[0]+' <span class="muted" style="font-weight:400">('+g[1].length+')</span></th>';}).join('');
-  var rows2='';
-  for(var qi=0;qi<7;qi++){rows2+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+grpsC.map(function(g){return '<td class="num">'+scell(numAvg(g[1],pcCol(PC_IDX.q0+qi)),'pulse')+'</td>';}).join('')+'</tr>';}
-  rows2+='<tr class="avg-row"><td class="namecell">Promedio</td>'+grpsC.map(function(g){var a=[];for(var qi=0;qi<7;qi++)a.push(numAvg(g[1],pcCol(PC_IDX.q0+qi)));return '<td class="num">'+scell(avgArr(a),'pulse')+'</td>';}).join('')+'</tr>';
-  // ── variación vs mes anterior (solo proyectos con datos el mes previo) ──
-  var projsV=projs.filter(function(p){return p.promPrev!=null;});
-  var headV='<th>Dimensión</th>'+projsV.map(function(p){return '<th class="num" title="'+esc(p.label)+'">'+esc(p.label.split(/\s*·\s*|\s+/)[0])+'</th>';}).join('')+'<th class="num">Summa</th>';
-  var rowsV='';
-  for(var qi=0;qi<7;qi++){(function(qi){rowsV+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+projsV.map(function(p){return '<td class="num">'+varCell(p.avgs[qi],p.prevAvgs[qi])+'</td>';}).join('')+'<td class="num">'+varCell(numAvg(all,pcCol(PC_IDX.q0+qi)),prevMes?numAvg(allPrev,pcCol(PC_IDX.q0+qi)):null)+'</td></tr>';})(qi);}
-  rowsV+='<tr class="avg-row"><td class="namecell">Promedio</td>'+projsV.map(function(p){return '<td class="num">'+varCell(p.prom,p.promPrev)+'</td>';}).join('')+'<td class="num">'+varCell(avgArr(projs.map(function(p){return p.prom;})),prevMes?avgArr(projs.map(function(p){return p.promPrev;})):null)+'</td></tr>';
-  var cmpBlock='<div class="section-label">Variación vs mes anterior'+(prevMes?' · '+esc(prevMes)+' → '+esc(mes):'')+'</div>'+
-    (prevMes&&projsV.length?'<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+headV+'</tr></thead><tbody>'+rowsV+'</tbody></table></div><div class="card-sub" style="margin-top:6px">Solo proyectos con datos en '+esc(prevMes)+'. ↑ verde = subió · ↓ rojo = bajó.</div></div>':'<div class="card"><div class="muted">No hay proyectos con datos del mes anterior para comparar.</div></div>');
-  body.innerHTML='<div class="tline">Mes: <b>'+esc(mes)+'</b> · dimensiones en filas, proyectos en columnas (peor promedio a la izquierda). Pasa el cursor por el código para ver el proyecto.</div>'+
-    '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
-    cmpBlock+
-    '<div class="section-label">Promedio Summa por cargo · '+esc(mes)+'</div>'+
-    '<div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head2+'</tr></thead><tbody>'+rows2+'</tbody></table></div></div>';
+  function col(qi){return pcCol(PC_IDX.q0+qi);}
+  // ════ TABLA 1 · Promedio general Summa + aperturas por cargo + Δ del mes ════
+  function grps(rows){return [['General',rows],['Analistas',rows.filter(function(r){return cargoOf(r)==='Analista';})],['Asociados/as',rows.filter(function(r){return cargoOf(r)==='Asociado/a';})]];}
+  var gc=grps(all),gp=grps(allPrev);
+  var t1head='<th>Dimensión</th>'+gc.map(function(g){return '<th class="num">'+g[0]+' <span class="muted" style="font-weight:400">('+g[1].length+')</span></th><th class="num">Δ</th>';}).join('');
+  var t1rows='';
+  for(var qi=0;qi<7;qi++){(function(qi){t1rows+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+gc.map(function(g,gi){var cur=numAvg(g[1],col(qi)),prev=prevMes?numAvg(gp[gi][1],col(qi)):null;return '<td class="num">'+scell(cur,'pulse')+'</td><td class="num">'+varCell(cur,prev)+'</td>';}).join('')+'</tr>';})(qi);}
+  t1rows+='<tr class="avg-row"><td class="namecell">Promedio</td>'+gc.map(function(g,gi){var ac=[],ap=[];for(var qi=0;qi<7;qi++){ac.push(numAvg(g[1],col(qi)));ap.push(prevMes?numAvg(gp[gi][1],col(qi)):null);}var cur=avgArr(ac),prev=prevMes?avgArr(ap):null;return '<td class="num">'+scell(cur,'pulse')+'</td><td class="num">'+varCell(cur,prev)+'</td>';}).join('')+'</tr>';
+  var t1='<div class="section-label">Promedio Summa · aperturas por cargo · '+esc(mes)+(prevMes?' (Δ vs '+esc(prevMes)+')':'')+'</div><div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+t1head+'</tr></thead><tbody>'+t1rows+'</tbody></table></div></div>';
+  // ════ TABLA 2 · por proyecto con Δ inline vs mes anterior ════
+  function inlineCell(cur,prev){return '<td class="num">'+scell(cur,'pulse')+'<div style="font-size:9.5px;margin-top:1px;line-height:1">'+(prev!=null&&cur!=null?varCell(cur,prev):'')+'</div></td>';}
+  var t2head='<th>Dimensión</th>'+projs.map(function(p){return '<th class="num" title="'+esc(p.label)+'">'+esc(p.label.split(/\s*·\s*|\s+/)[0])+'</th>';}).join('')+'<th class="num">Summa</th>';
+  var t2rows='';
+  for(var qi=0;qi<7;qi++){(function(qi){t2rows+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+projs.map(function(p){return inlineCell(p.avgs[qi],p.prevAvgs[qi]);}).join('')+inlineCell(numAvg(all,col(qi)),prevMes?numAvg(allPrev,col(qi)):null)+'</tr>';})(qi);}
+  t2rows+='<tr class="avg-row"><td class="namecell">Promedio</td>'+projs.map(function(p){return inlineCell(p.prom,p.promPrev);}).join('')+inlineCell(avgArr(projs.map(function(p){return p.prom;})),prevMes?avgArr(projs.map(function(p){return p.promPrev;})):null)+'</tr>';
+  var t2='<div class="section-label">Por proyecto · '+esc(mes)+(prevMes?' · Δ vs '+esc(prevMes):'')+'</div><div class="card"><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+t2head+'</tr></thead><tbody>'+t2rows+'</tbody></table></div><div class="card-sub" style="margin-top:6px">Peor promedio a la izquierda · bajo cada valor, la Δ vs el mes anterior.</div></div>';
+  // ════ TABLA 3 · asignar nombres a las respuestas anónimas, por proyecto ════
+  var dlId='pc-name-dl',dlOpts={};STAFF.forEach(function(s){if(s.name)dlOpts[s.name]=1;});codes.forEach(function(c){(REG[c]&&REG[c].people||[]).forEach(function(p){if(p.name)dlOpts[p.name]=1;});});
+  var dlHtml='<datalist id="'+dlId+'">'+Object.keys(dlOpts).map(function(n){return '<option value="'+esc(n)+'">';}).join('')+'</datalist>';
+  var t3blocks=projs.slice().sort(function(a,b){return a.label<b.label?-1:a.label>b.label?1:0;}).map(function(p){
+    var rc=pcRows(p.code,mes);if(!rc.length)return '';
+    var hr='<tr>'+rc.map(function(r){return '<th class="num">'+esc(String(r[pcCol(PC_IDX.cargo)]||'—'))+'</th>';}).join('')+'</tr>';
+    var nr='<tr>'+rc.map(function(r,i){var key=pcRespKey(r,p.code,mes+'#'+i),asig=PS_CONSULTOR[key]!=null?String(PS_CONSULTOR[key]).trim():'';return '<td>'+(psEditable()?'<input class="ps-cons-inp" list="'+dlId+'" data-key="'+esc(key)+'" value="'+esc(asig)+'" placeholder="nombre" onchange="savePCConsultor(this)" style="width:110px">':(asig?'<span class="namecell">'+esc(asig)+'</span>':'<span class="muted">—</span>'))+'</td>';}).join('')+'</tr>';
+    return '<div style="margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:4px">'+esc(p.label)+' <span class="muted" style="font-weight:400;font-size:11px">· '+rc.length+' respuesta'+(rc.length!==1?'s':'')+'</span></div><div class="dtable-wrap"><table class="dtable"><thead>'+hr+'</thead><tbody>'+nr+'</tbody></table></div></div>';
+  }).join('');
+  var t3='<div class="section-label">Asignar nombres a las respuestas · '+esc(mes)+'</div><div class="card"><div class="card-sub" style="margin-bottom:8px">Cada columna es una respuesta anónima (por cargo). '+(psEditable()?'Escribe el nombre y se guarda para todo el equipo.':'Solo un admin puede editar los nombres.')+'</div>'+dlHtml+t3blocks+'</div>';
+  body.innerHTML='<div class="tline">Mes: <b>'+esc(mes)+'</b> · dimensiones en filas (mismo orden en todas las tablas).</div>'+t1+t2+t3;
 }
 function avgArr(a){var f=a.filter(function(v){return v!=null;});return f.length?Math.round(f.reduce(function(x,y){return x+y;},0)/f.length*10)/10:null;}
 
