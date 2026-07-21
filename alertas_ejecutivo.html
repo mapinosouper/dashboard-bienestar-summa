@@ -665,13 +665,12 @@ function ddPulseContent(code,mode){
     var rc=pcRows(code,cur);
     var dl='',dlId='pc-staff-dl-'+code;
     if(psEditable()){var seen={},opts='';(REG[code]&&REG[code].people||[]).concat(STAFF).forEach(function(p){var n=String(p.name||'').trim();if(n&&!seen[n]){seen[n]=1;opts+='<option value="'+esc(n)+'">';}});dl='<datalist id="'+dlId+'">'+opts+'</datalist>';}
-    var h=dl+'<div class="card"><div class="card-sub">Respuestas del mes · '+esc(cur)+' (Pulse es anónimo; se identifica por cargo)</div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr><th>Cargo</th><th>Consultor</th>'+PC_Q_SHORT.map(function(q){return '<th class="num" title="'+esc(q)+'">'+esc(q.split(' ')[0])+'</th>';}).join('')+'</tr></thead><tbody>';
-    rc.forEach(function(r,i){
-      var key=pcRespKey(r,code,cur+'#'+i),asig=PS_CONSULTOR[key]!=null?String(PS_CONSULTOR[key]).trim():'';
-      var consCell=psEditable()?'<td><input class="ps-cons-inp" list="'+dlId+'" data-key="'+esc(key)+'" value="'+esc(asig)+'" placeholder="—" onchange="savePCConsultor(this)"></td>':'<td>'+(asig?'<span class="namecell">'+esc(asig)+'</span>':'<span class="muted">—</span>')+'</td>';
-      h+='<tr><td class="cargo">'+esc(String(r[pcCol(PC_IDX.cargo)]||''))+'</td>'+consCell;
-      for(var qi=0;qi<7;qi++){var v=parseN(r[pcCol(PC_IDX.q0+qi)]);h+='<td class="num" style="color:'+scoreColor(v,'pulse')+';font-weight:'+(v!=null&&v<TH?'700':'500')+'">'+(v!=null?v:'—')+'</td>';}h+='</tr>';});
-    return h+'</tbody></table></div>'+(psEditable()?'<div class="card-sub" style="margin-top:6px">El "Consultor" es editable, sugiere al equipo del proyecto y se guarda para todos.</div>':'')+'</div>';
+    // preguntas en filas (orden fijo) · una columna por respuesta (cargo + consultor)
+    var head='<th>Dimensión</th>'+rc.map(function(r,i){var key=pcRespKey(r,code,cur+'#'+i),asig=PS_CONSULTOR[key]!=null?String(PS_CONSULTOR[key]).trim():'';var cargo=esc(String(r[pcCol(PC_IDX.cargo)]||'—'));var cons=psEditable()?'<input class="ps-cons-inp" list="'+dlId+'" data-key="'+esc(key)+'" value="'+esc(asig)+'" placeholder="—" onchange="savePCConsultor(this)" style="width:88px">':(asig?'<span class="namecell">'+esc(asig)+'</span>':'<span class="muted">—</span>');return '<th class="num"><div>'+cargo+'</div><div style="font-weight:400;font-size:10px;margin-top:2px">'+cons+'</div></th>';}).join('');
+    var rows='';
+    for(var qi=0;qi<7;qi++){(function(qi){rows+='<tr><td class="namecell">'+esc(PC_Q_SHORT[qi])+'</td>'+rc.map(function(r){var v=parseN(r[pcCol(PC_IDX.q0+qi)]);return '<td class="num" style="color:'+scoreColor(v,'pulse')+';font-weight:'+(v!=null&&v<TH?'700':'500')+'">'+(v!=null?v:'—')+'</td>';}).join('')+'</tr>';})(qi);}
+    rows+='<tr class="avg-row"><td class="namecell">Promedio</td>'+rc.map(function(r){var a=[];for(var qi=0;qi<7;qi++){var v=parseN(r[pcCol(PC_IDX.q0+qi)]);if(v!=null)a.push(v);}return '<td class="num">'+scell(a.length?Math.round(a.reduce(function(x,y){return x+y;},0)/a.length*10)/10:null,'pulse')+'</td>';}).join('')+'</tr>';
+    return dl+'<div class="card"><div class="card-sub">Respuestas del mes · '+esc(cur)+' (Pulse es anónimo; se identifica por cargo). Preguntas en filas · una columna por respuesta.</div><div class="dtable-wrap"><table class="dtable sticky-first"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+(psEditable()?'<div class="card-sub" style="margin-top:6px">El "Consultor" es editable, sugiere al equipo del proyecto y se guarda para todos.</div>':'')+'</div>';
   }
   var head='<th>Dimensión</th>'+months.map(function(m){return '<th class="num">'+esc(m)+'</th>';}).join('')+(prev?'<th class="num">Var últ. 2</th>':'')+'<th class="num">Notas &lt;'+TH+'</th>';
   var rows='';
