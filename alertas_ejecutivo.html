@@ -229,6 +229,22 @@ a{color:inherit}
 .legend-item{display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--muted);padding:5px 0;line-height:1.45}
 .legend-item b{color:var(--text)} .legend .dot{margin-top:5px}
 @media(max-width:680px){.triage{grid-template-columns:repeat(2,1fr)}}
+.fb-fab{position:fixed;right:16px;bottom:16px;z-index:50;background:var(--primary);color:#fff;border:none;border-radius:24px;padding:11px 16px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(3,24,67,.28);cursor:pointer}
+.fb-ov{position:fixed;inset:0;background:rgba(3,24,67,.45);z-index:60;display:none;align-items:center;justify-content:center;padding:18px}
+.fb-ov.open{display:flex}
+.fb-modal{background:var(--card);border-radius:16px;max-width:440px;width:100%;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.28)}
+.fb-modal h3{margin:0 0 3px;font-size:17px;color:var(--primary)}
+.fb-sub{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+.fb-modal textarea{width:100%;min-height:96px;border:1px solid var(--border);border-radius:10px;padding:9px;font:inherit;font-size:13px;resize:vertical;outline:none;box-sizing:border-box}
+.fb-modal textarea:focus{border-color:var(--cyan)}
+.fb-cats{display:flex;gap:6px;margin:11px 0}
+.fb-cat{flex:1;padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;cursor:pointer;text-align:center;user-select:none}
+.fb-cat.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.fb-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.fb-btn{padding:9px 15px;border-radius:9px;border:none;font-size:13px;font-weight:700;cursor:pointer}
+.fb-btn.primary{background:var(--primary);color:#fff}
+.fb-btn.ghost{background:transparent;color:var(--muted)}
+.fb-msg{font-size:12.5px;margin-top:8px;min-height:15px}
 </style>
 </head>
 <body>
@@ -270,6 +286,24 @@ a{color:inherit}
 
 <!-- ════ APP ════ -->
 <div id="app" style="display:none">
+<button class="fb-fab" id="fb-fab" onclick="openFeedback()">💬 Feedback</button>
+<div class="fb-ov" id="fb-ov" onclick="if(event.target===this)closeFeedback()">
+  <div class="fb-modal">
+    <h3>Tu feedback</h3>
+    <div class="fb-sub">¿Qué mejorarías, qué falla o qué idea tienes? Va directo al equipo.</div>
+    <div class="fb-cats" id="fb-cats">
+      <div class="fb-cat active" data-cat="idea" onclick="fbSetCat(this)">💡 Idea</div>
+      <div class="fb-cat" data-cat="bug" onclick="fbSetCat(this)">🐞 Problema</div>
+      <div class="fb-cat" data-cat="otro" onclick="fbSetCat(this)">💬 Otro</div>
+    </div>
+    <textarea id="fb-text" placeholder="Escribe tu comentario…"></textarea>
+    <div class="fb-msg" id="fb-msg"></div>
+    <div class="fb-actions">
+      <button class="fb-btn ghost" onclick="closeFeedback()">Cancelar</button>
+      <button class="fb-btn primary" id="fb-send" onclick="submitFeedback()">Enviar</button>
+    </div>
+  </div>
+</div>
 <div class="nav" id="nav"></div>
 <div class="wrap">
   <!-- RESUMEN EJECUTIVO -->
@@ -951,6 +985,25 @@ function showScreen(s){
   document.getElementById('login').style.display=s==='login'?'flex':'none';
   document.getElementById('upload').style.display=s==='upload'?'flex':'none';
   document.getElementById('app').style.display=s==='app'?'block':'none';
+}
+// ── feedback → GitHub Issues (vía Supabase Edge Function submit-feedback) ──
+var FB_CAT='idea';
+function fbSetCat(el){FB_CAT=el.getAttribute('data-cat');var cs=document.querySelectorAll('#fb-cats .fb-cat');for(var i=0;i<cs.length;i++)cs[i].classList.toggle('active',cs[i]===el);}
+function openFeedback(){document.getElementById('fb-msg').textContent='';document.getElementById('fb-ov').classList.add('open');var t=document.getElementById('fb-text');if(t)t.focus();}
+function closeFeedback(){document.getElementById('fb-ov').classList.remove('open');}
+function submitFeedback(){
+  var txt=(document.getElementById('fb-text').value||'').trim(),m=document.getElementById('fb-msg');
+  if(txt.length<3){m.style.color='var(--critico)';m.textContent='Escribe un comentario primero.';return;}
+  if(!SB){m.style.color='var(--critico)';m.textContent='El feedback está disponible al iniciar sesión.';return;}
+  var btn=document.getElementById('fb-send');btn.disabled=true;btn.textContent='Enviando…';
+  var view=(document.querySelector('.nav-btn.active')||{}).textContent||'';
+  var payload={comment:txt,category:FB_CAT,email:CURRENT_EMAIL||'anónimo',view:view,ua:navigator.userAgent};
+  SB.functions.invoke('submit-feedback',{body:payload}).then(function(r){
+    btn.disabled=false;btn.textContent='Enviar';
+    if(r.error){m.style.color='var(--critico)';m.textContent='No se pudo enviar. Intenta más tarde.';return;}
+    m.style.color='var(--ok)';m.textContent='¡Gracias! Tu feedback fue enviado.';
+    document.getElementById('fb-text').value='';setTimeout(closeFeedback,1500);
+  }).catch(function(){btn.disabled=false;btn.textContent='Enviar';m.style.color='var(--critico)';m.textContent='Error de conexión.';});
 }
 function enterWith(d){
   setData(d);buildModel();fillProjectSelect();fillMonths();initTrControls();
